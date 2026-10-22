@@ -14,13 +14,14 @@ import { StatusBar } from 'expo-status-bar';
 const API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   Platform.select({
-    android: 'http://10.0.2.2:8000',
-    default: 'http://localhost:8000',
+    android: 'http://10.0.2.2:8001',
+    default: 'http://localhost:8001',
   })!;
 
 type PlanResult = {
   tasks: string[];
   breakdown: string;
+  model?: string | null;
 };
 
 export default function App() {
@@ -97,6 +98,9 @@ export default function App() {
             ))}
             {result.breakdown ? (
               <Text style={styles.breakdown}>{result.breakdown}</Text>
+            ) : null}
+            {result.model ? (
+              <Text style={styles.model}>model: {result.model}</Text>
             ) : null}
           </View>
         ) : null}
@@ -193,5 +197,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 8,
     fontStyle: 'italic',
+  },
+  model: {
+    color: '#5a6270',
+    fontSize: 11,
+    marginTop: 10,
   },
 });

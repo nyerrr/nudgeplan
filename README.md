@@ -12,7 +12,10 @@ frontend/  React Native + Expo + TypeScript   (mobile UI, check-ins, task cards)
 backend/   Python + FastAPI + google-genai    (AI calls, validation, planning)
 ```
 
-## Quick start
+## Quick start (no Android phone required)
+
+You can develop and test everything in a web browser. The code stays
+Android-first, so nothing needs to change when you get a device.
 
 ### 1. Backend
 
@@ -24,43 +27,66 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-Add your key from [Google AI Studio](https://aistudio.google.com/apikey) to `.env`:
-
-```
-GEMINI_API_KEY=your_key_here
-GEMINI_MODEL=gemini-2.0-flash
-```
-
-Run it:
+`backend/.env` ships with `GEMINI_MOCK=true`, so it works with **no API key**.
+To use real AI later, get a free key at https://aistudio.google.com/apikey,
+paste it into `GEMINI_API_KEY`, and set `GEMINI_MOCK=false`.
 
 ```powershell
-uvicorn main:app --reload
+python run.py
 ```
 
-API at http://localhost:8000 — docs at http://localhost:8000/docs
+Backend runs on http://localhost:8001
 
 ### 2. Frontend
 
 ```powershell
 cd frontend
 npm install
-npx expo start
+npx expo start --web
 ```
 
-Press `a` for an Android emulator, `w` for web, or scan the QR code with Expo Go.
+Open http://localhost:8081 and type a brain dump.
 
-If you are on a physical Android device, set your PC's LAN IP in `frontend/.env`:
-
-```
-EXPO_PUBLIC_API_URL=http://192.168.x.x:8000
-```
-
-## Testing
+### 3. Test the API directly
 
 ```powershell
 cd backend
-python test_pipeline.py   # offline: verifies the Gemini code path with a mock
-python test_gemini.py     # live: requires GEMINI_API_KEY and a running server
+python test_pipeline.py   # offline, no key needed
+python test_gemini.py     # live, needs a real key
+```
+
+## Troubleshooting
+
+### `ERROR: [WinError 10013]` when starting the backend
+
+The port is blocked, usually by an orphaned uvicorn reloader child process:
+
+```powershell
+cd backend
+python free_port.py 8001
+python run.py --reload
+```
+
+### Port 8081 already in use (Metro)
+
+```powershell
+cd backend
+python free_port.py 8081
+```
+
+### `net::ERR_CONNECTION_REFUSED` in the browser
+
+The backend is not running. Start it in another terminal:
+
+```powershell
+cd backend
+python run.py
+```
+
+Then check it responds:
+
+```powershell
+Invoke-RestMethod http://localhost:8001/health
 ```
 
 ## Roadmap

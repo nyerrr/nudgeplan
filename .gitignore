@@ -3,6 +3,7 @@ node_modules/
 dist/
 web-build/
 *.log
+*.err
 .DS_Store
 .env
 .venv/

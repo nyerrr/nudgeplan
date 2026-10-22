@@ -33,7 +33,10 @@ class FakeClient:
 def run_case(name: str, raw: str, expected_task_count: int):
     fake = FakeClient(raw)
     main.client = fake
-    original = main.MODEL_NAME
+    # The mock planner short-circuits before the Gemini client, so force the
+    # real code path for these cases.
+    main.MOCK = False
+    main.HAS_REAL_KEY = True
 
     from fastapi.testclient import TestClient
 
@@ -47,7 +50,6 @@ def run_case(name: str, raw: str, expected_task_count: int):
     )
     assert "tasks" in body and "breakdown" in body and "raw" in body
     assert "report" in fake.models.last_prompt.lower()
-    main.MODEL_NAME = original
     print(f"[OK] {name}: {len(body['tasks'])} tasks, breakdown={body['breakdown'][:60]!r}")
 
 
@@ -73,6 +75,20 @@ def main_check() -> int:
 
     # 3. Malformed output -> falls back to a single task, does not crash
     run_case("malformed json", "sorry I cannot help", 1)
+
+    # 4. Offline planner path (no Gemini call at all)
+    main.MOCK = True
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.app) as client:
+        res = client.post(
+            "/ai/plan",
+            json={"text": "finish my paper, do laundry, and go to the gym"},
+        )
+    assert res.status_code == 200, f"offline: got {res.status_code} -> {res.text}"
+    tasks = res.json()["tasks"]
+    assert len(tasks) == 3, f"offline: expected 3 tasks, got {len(tasks)}"
+    print(f"[OK] offline planner: {tasks}")
 
     print("\n[OK] All pipeline cases passed.")
     return 0
