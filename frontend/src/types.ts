@@ -96,21 +96,42 @@ export interface HistoryEntry {
   text: string;
 }
 
+/** One day of real completion data, used by Insights. */
+export interface DailyStat {
+  date: string;
+  done: number;
+  total: number;
+}
+
 export interface AppState {
-  v: 1;
+  v: 2;
+  onboarded: boolean;
   name: string;
   startH: number;
   endH: number;
   energy: Energy;
   nudges: boolean;
+  nudgeLeadMin: number;
   theme: ThemeMode;
   view: Day;
   focusId: string | null;
   chat: ChatMessage[];
   checkins: string[];
   history: HistoryEntry[];
+  daily: DailyStat[];
+  lastActiveDate: string;
   tasks: Task[];
 }
+
+export interface OnboardingProfile {
+  name: string;
+  startH: number;
+  endH: number;
+  energy: Energy;
+  nudges: boolean;
+}
+
+export type AiStatus = 'checking' | 'online' | 'offline';
 
 export interface TaskDraft {
   id: string | null;
@@ -126,6 +147,8 @@ export interface TimerState {
   stepId: string | null;
   secs: number;
   running: boolean;
+  /** Epoch ms when the running timer ends; null while paused. */
+  endsAt: number | null;
 }
 
 export interface ToastState {

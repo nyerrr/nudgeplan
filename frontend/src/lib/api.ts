@@ -15,7 +15,7 @@ const API_URL =
 
 async function postJson<T>(path: string, body: unknown): Promise<T | null> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 6000);
+  const timeout = setTimeout(() => controller.abort(), 8000);
   try {
     const response = await fetch(`${API_URL}${path}`, {
       method: 'POST',
@@ -25,6 +25,30 @@ async function postJson<T>(path: string, body: unknown): Promise<T | null> {
     });
     if (!response.ok) return null;
     return (await response.json()) as T;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export interface BackendHealth {
+  status: string;
+  model: string;
+  gemini_configured: boolean;
+  mock_mode: boolean;
+}
+
+/** Used by Settings to show whether smart parsing is reachable. */
+export async function checkBackend(): Promise<BackendHealth | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(`${API_URL}/health`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as BackendHealth;
   } catch {
     return null;
   } finally {

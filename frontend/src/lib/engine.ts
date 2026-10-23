@@ -2,13 +2,16 @@ import type {
   AppState,
   ChatCta,
   ChatMessage,
+  DailyStat,
   Day,
   Effort,
   Energy,
+  OnboardingProfile,
   ParsedCheckIn,
   ParsedTask,
   Step,
   Task,
+  TimerState,
 } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -295,49 +298,162 @@ export function createTask(
 }
 
 export function seedState(): AppState {
-  const tasks = [
-    createTask('Draft client proposal', 90, 'high', 'today', 3, 540, true),
-    createTask('Team sync', 30, 'low', 'today', 3, 690, true),
-    createTask('Deep work: research', 120, 'high', 'today', 3, 840, true),
-    createTask('Prep slides for Friday', 90, 'high', 'today', 2),
-    createTask('Review pull requests', 60, 'med', 'today', 2),
-    createTask('Reply to emails', 60, 'low', 'today', 1),
-    createTask('Weekly planning', 30, 'low', 'tomorrow', 2),
-  ];
-  const scheduled = planTasks(tasks, 9, 18, 'medium');
+  return initialState();
+}
 
+/**
+ * A brand-new install. No sample tasks, messages, or history: everything the
+ * user sees from here is theirs.
+ */
+export function initialState(): AppState {
   return {
-    v: 1,
-    name: 'Alex',
+    v: 2,
+    onboarded: false,
+    name: '',
     startH: 9,
     endH: 18,
     energy: 'medium',
     nudges: true,
+    nudgeLeadMin: 15,
     theme: 'auto',
     view: 'today',
     focusId: null,
-    chat: [
-      {
-        id: newId('m'),
-        from: 'bot',
-        text: 'Good to see you, Alex. What is on your plate today? Type it, or tap the mic.',
-      },
-    ],
-    checkins: [0, -1, -2, -3].map((offset) => todayIso(offset)),
-    history: [
-      {
-        id: newId('h'),
-        when: 'Tuesday',
-        text: 'Moved 2 tasks, finished 100%',
-      },
-      {
-        id: newId('h'),
-        when: 'Thursday',
-        text: 'Moved 1 task, finished 90%',
-      },
-    ],
-    tasks: scheduled,
+    chat: [],
+    checkins: [],
+    history: [],
+    daily: [],
+    lastActiveDate: todayIso(0),
+    tasks: [],
   };
+}
+
+export function welcomeMessage(name: string): ChatMessage {
+  const firstName = name.trim().split(/\s+/)[0] || 'there';
+  return {
+    id: newId('m'),
+    from: 'bot',
+    text: `Hi ${firstName}. Tell me what is on your plate today. I will sort it into a realistic plan and keep the heavy work in your peak hours.`,
+  };
+}
+
+export function applyOnboarding(
+  state: AppState,
+  profile: OnboardingProfile,
+): AppState {
+  const name = profile.name.trim().slice(0, 24);
+  return {
+    ...state,
+    onboarded: true,
+    name,
+    startH: profile.startH,
+    endH: profile.endH,
+    energy: profile.energy,
+    nudges: profile.nudges,
+    chat: [welcomeMessage(name)],
+    lastActiveDate: todayIso(0),
+    tasks: planTasks(
+      state.tasks,
+      profile.startH,
+      profile.endH,
+      profile.energy,
+    ),
+  };
+}
+
+function labelForDate(iso: string): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  if (!year || !month || !day) return iso;
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/**
+ * Move the plan into a new day the first time the app opens after midnight.
+ * Finished work is archived into the daily log; unfinished work carries over,
+ * and stale clock times are cleared so appointments do not reappear.
+ */
+export function rollover(state: AppState): { state: AppState; rolled: boolean } {
+  const today = todayIso(0);
+  if (state.lastActiveDate === today) return { state, rolled: false };
+
+  const yesterday = state.tasks.filter((task) => task.day === 'today');
+  const done = yesterday.filter((task) => task.done).length;
+  const total = yesterday.length;
+  const stat: DailyStat = { date: state.lastActiveDate, done, total };
+  const daily = [...state.daily.filter((entry) => entry.date !== stat.date), stat]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-60);
+
+  const kept: Task[] = [];
+  state.tasks.forEach((task) => {
+    if (task.day === 'tomorrow') {
+      kept.push({ ...task, day: 'today' });
+    } else if (!task.done) {
+      kept.push({ ...task, day: 'today', start: null, fixed: false });
+    }
+  });
+
+  const history =
+    total > 0
+      ? [
+          {
+            id: newId('h'),
+            when: labelForDate(state.lastActiveDate),
+            text: `${done} of ${total} finished. ${total - done} carried over.`,
+          },
+          ...state.history,
+        ].slice(0, 20)
+      : state.history;
+
+  return {
+    state: {
+      ...state,
+      tasks: planTasks(kept, state.startH, state.endH, state.energy),
+      daily,
+      lastActiveDate: today,
+      history,
+    },
+    rolled: true,
+  };
+}
+
+/** Keep today's real completion numbers in the daily log. */
+export function syncDaily(state: AppState): AppState {
+  const today = todayIso(0);
+  const tasks = state.tasks.filter((task) => task.day === 'today');
+  const stat: DailyStat = {
+    date: today,
+    done: tasks.filter((task) => task.done).length,
+    total: tasks.length,
+  };
+  const daily = [...state.daily.filter((entry) => entry.date !== today), stat]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-60);
+  return { ...state, daily };
+}
+
+/** Oldest first, including zero days, so Insights never shows invented data. */
+export function dailySeries(state: AppState, count = 7): DailyStat[] {
+  const byDate = new Map(state.daily.map((entry) => [entry.date, entry]));
+  return Array.from({ length: count }, (_, index) => {
+    const date = todayIso(index - (count - 1));
+    return byDate.get(date) ?? { date, done: 0, total: 0 };
+  });
+}
+
+export function completionRate(stat: DailyStat): number {
+  if (!stat.total) return 0;
+  return Math.round((stat.done / stat.total) * 100);
+}
+
+export function remainingSeconds(timer: TimerState, now = Date.now()): number {
+  if (timer.running && timer.endsAt != null) {
+    return Math.max(0, Math.ceil((timer.endsAt - now) / 1000));
+  }
+  return timer.secs;
 }
 
 // ---------------------------------------------------------------------------
