@@ -1,5 +1,9 @@
 # NudgePlan Frontend (React Native + Expo + TypeScript)
 
+The mobile app is Android-first but runs in the browser for fast iteration. It
+works offline by default: planning, scheduling, Reality Check, and micro-step
+generation all run locally in `src/lib/engine.ts`.
+
 ## Setup
 
 ```powershell
@@ -26,7 +30,7 @@ npx expo start
 ```
 
 Press `a`. The emulator reaches the backend at `http://10.0.2.2:8001`
-(this default is already set in `App.tsx`).
+(this default is set in `src/lib/api.ts`).
 
 ### Option C: Physical Android phone (requires Expo Go)
 
@@ -50,7 +54,91 @@ Find your LAN IP with `ipconfig` (look for IPv4 Address).
 
 ## Current features
 
-- Brain dump text input
-- Calls `POST /ai/plan` on the FastAPI backend
-- Renders returned micro-steps and breakdown
-- Loading and error states
+### Navigation
+
+- Home, Plan, Focus, and Insights tabs, plus a central Check-in button
+- Profile and About screens reachable from Home and Profile
+- Custom state-based tab navigator (no react-navigation dependency)
+
+### Home
+
+- Time-aware greeting and quick brain-dump bar with a simulated voice sample
+- Reality Check card: planned vs. open time, capacity %, move/keep actions
+- Low/Medium/High energy selector that re-runs the schedule
+- Up-next task list with inline completion
+- Nudge card with "Start now" and "Later" actions
+
+### Plan
+
+- Today/Tomorrow toggle
+- Capacity meter and energy-by-hour visualization
+- Peak-hour hint that counts high-effort tasks placed in the peak
+- Timeline of scheduled tasks and a "Needs room" section
+- Task sheet for create/edit/delete, including duration, effort, day, priority,
+  optional fixed start time, and "Break into steps"
+
+### Check-in
+
+- Conversational chat with typing indicator
+- Demo chips for common brain dumps
+- Calls `POST /plan/checkin`; falls back to local parsing if the backend is down
+- Parsed task cards, capacity warning, and CTAs such as "Move N to tomorrow",
+  "View plan", and "Open focus"
+
+### Focus (Micro-Step Guard)
+
+- Task picker for open tasks
+- Breaks a task into steps of 10 minutes or less
+- Countdown timer with Start/Pause, Reset, and Skip 1 min
+- Step checklist, "Done with this step", and "Make it smaller"
+- Add your own step
+
+### Insights
+
+- Completion by day, capacity today, micro-steps finished, check-in streak
+- Energy-by-hour chart and recent Reality Check history
+
+### Profile
+
+- Name, working hours, nudges toggle, Auto/Light/Dark theme
+- About screen
+- Prototype demos: brain dump, overload, get unstuck, low energy, reset
+
+### Persistence and theme
+
+- AsyncStorage persists tasks, chat, history, settings, theme, and step progress
+- Poppins fonts, Ionicons, LinearGradient, and safe-area insets
+- Light and dark palettes from the original prototype
+
+## Code map
+
+```
+App.tsx                     App shell, fonts, screen switch
+src/state.tsx               Central provider: state, persistence, actions, demos
+src/theme.ts                Light/dark palettes and typography
+src/types.ts                Shared types
+src/lib/engine.ts           Parsing, energy curve, scheduling, Reality Check, steps
+src/lib/api.ts              Backend calls with timeout and null fallback
+src/lib/storage.ts          AsyncStorage load/save
+src/components/             UI kit, task rows, tab bar, toast, task sheet
+src/screens/                Home, Plan, Check-in, Focus, Insights, Profile, About
+```
+
+## Testing and checks
+
+```powershell
+npx tsc --noEmit
+npx expo export --platform web
+```
+
+With the backend running (`python run.py` in `backend/`), try:
+
+1. Check in with "I'm tired today. Study for the chem exam 90m, laundry".
+2. Confirm the Reality Check warning and "Move N to tomorrow".
+3. Open Focus, break down "Draft client proposal", start the timer, and complete
+   a step.
+4. Reload the page and confirm tasks, chat, and settings persist.
+5. Open Profile and run "Reset the demo" to return to the seeded state.
+
+If the backend is not running, the app still works; check-ins and breakdowns
+use the local engine, and the UI simply skips AI-authored wording.

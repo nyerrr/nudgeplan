@@ -3,14 +3,41 @@
 Brain dump in. A plan you can actually do out.
 
 NudgePlan is an Android-first mobile app built with React Native + Expo, backed by a
-Python FastAPI service that uses the Gemini API for task understanding and breakdown.
+Python FastAPI service. It turns a short, messy check-in into a realistic day:
+tasks are parsed, scheduled around your energy curve, checked against your open
+hours, and split into startable micro-steps when you feel stuck.
+
+The app is fully usable **offline** (`GEMINI_MOCK=true`, no API key). A Gemini key
+only upgrades the language understanding; the planning logic is deterministic and
+shared by the backend and the mobile client.
+
+## What is in the app
+
+| Area | What it does |
+| ---- | ------------ |
+| **Home** | Greeting, quick check-in bar, Reality Check engine, energy selector, up-next list, gentle nudges |
+| **Plan** | Today/tomorrow timeline, capacity meter, energy-by-hour strip, "needs room" tasks, task create/edit sheet |
+| **Check-in** | Conversational brain dump with demo chips, typing state, parsed task cards, and one-tap actions |
+| **Focus** | Task picker, Micro-Step Guard breakdown, countdown timer, step checklists, "make it smaller" |
+| **Insights** | Completion history, capacity, micro-step count, check-in streak, recent reality checks |
+| **Profile** | Name, working hours, nudges, auto/light/dark theme, prototype demos, reset |
+| **About** | Product story, problem/solution, audience, roadmap, and team |
+
+Everything persists locally with AsyncStorage, including tasks, chat, theme,
+working hours, and completed steps.
 
 ## Architecture
 
 ```
-frontend/  React Native + Expo + TypeScript   (mobile UI, check-ins, task cards)
-backend/   Python + FastAPI + google-genai    (AI calls, validation, planning)
+frontend/  React Native + Expo + TypeScript   (UI, local engine, persistence)
+backend/   Python + FastAPI + google-genai    (parsing, planning, AI calls)
 ```
+
+- `frontend/src/lib/engine.ts` - TypeScript port of parsing, capacity, scheduling,
+  Reality Check, and micro-step generation. Used offline and as an instant fallback.
+- `backend/engine.py` - Python mirror of the same rules, covered by `test_engine.py`.
+- `backend/main.py` - API routes. Gemini is optional; every route degrades to the
+  deterministic engine when mock mode is on or a call fails.
 
 ## Quick start (no Android phone required)
 
@@ -27,7 +54,7 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-`backend/.env` ships with `GEMINI_MOCK=true`, so it works with **no API key**.
+`backend/.env.example` ships with `GEMINI_MOCK=true`, so it works with **no API key**.
 To use real AI later, get a free key at https://aistudio.google.com/apikey,
 paste it into `GEMINI_API_KEY`, and set `GEMINI_MOCK=false`.
 
@@ -45,15 +72,39 @@ npm install
 npx expo start --web
 ```
 
-Open http://localhost:8081 and type a brain dump.
+Open http://localhost:8081 and type a brain dump, or open Profile and try the
+prototype demos.
 
 ### 3. Test the API directly
 
 ```powershell
 cd backend
-python test_pipeline.py   # offline, no key needed
-python test_gemini.py     # live, needs a real key
+python test_engine.py     # offline engine + API contract
+python test_pipeline.py   # offline, mocks the Gemini client
+python test_fallback.py   # offline, verifies the model fallback chain
+python test_gemini.py     # live, needs a real key and a running server
 ```
+
+Frontend checks:
+
+```powershell
+cd frontend
+npx tsc --noEmit
+npx expo export --platform web
+```
+
+## API at a glance
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET | `/health` | Health + active model/mode |
+| POST | `/plan/checkin` | Brain dump -> parsed tasks, energy, reply |
+| POST | `/plan/steps` | Task -> micro-steps of 10 minutes or less |
+| POST | `/plan/schedule` | Tasks -> scheduled tasks + Reality Check |
+| POST | `/ai/plan` | Legacy brain dump -> list of micro-step strings |
+
+See `backend/README.md` for request/response examples and
+`frontend/README.md` for screen and state details.
 
 ## Troubleshooting
 
@@ -93,8 +144,8 @@ Invoke-RestMethod http://localhost:8001/health
 
 | Phase | Weeks | Focus                                        |
 | ----- | ----- | -------------------------------------------- |
-| 1     | 1–4   | Working prototype: setup, brain dump, plan   |
-| 2     | 5–8   | Reality Check Engine, Micro-Step Guard       |
-| 3     | 9–12  | Supabase auth, persistence, EAS build        |
+| 1     | 1-4   | Working prototype: brain dump, plan, check-in |
+| 2     | 5-8   | Reality Check Engine, Micro-Step Guard        |
+| 3     | 9-12  | Supabase auth, cloud sync, EAS build          |
 
 See `backend/README.md` and `frontend/README.md` for details.
