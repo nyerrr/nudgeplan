@@ -101,9 +101,54 @@ python test_gemini.py     # live, needs GEMINI_API_KEY and a running server
 
 ```json
 {
-  "tasks": ["Draft: the paper outline", "Do: laundry", "Go: to the gym"],
-  "breakdown": "Offline mode: split your dump into 3 startable steps.",
-  "raw": "(offline planner - no Gemini API call made)",
+  "tasks": [
+    {
+      "title": "Draft the report outline",
+      "minutes": 25,
+      "energy": "high",
+      "priority": "high",
+      "due": "today",
+      "steps": ["Open the document", "Write three headings", "Stop there"]
+    },
+    {
+      "title": "Start one load of laundry",
+      "minutes": 10,
+      "energy": "low",
+      "priority": "medium",
+      "due": null,
+      "steps": ["Collect the basket", "Press start"]
+    }
+  ],
+  "breakdown": "Protect the morning for writing, then batch chores.",
+  "raw": "{...}",
   "model": "gemini-3.6-flash"
 }
 ```
+
+`model` reports which model actually served the request. In `GEMINI_MOCK` mode
+it is `offline-planner`.
+
+### The Micro-Step Guard
+
+The model is never trusted directly. Every response passes through
+`_normalise_plan()` in `main.py`:
+
+| Field      | Guard                                                          |
+| ---------- | -------------------------------------------------------------- |
+| `title`    | Whitespace collapsed, empty titles drop the task               |
+| `minutes`  | Coerced to int, clamped to 5-480, rounded to the nearest 5     |
+| `energy`   | Must be `low`/`medium`/`high`, otherwise `medium`              |
+| `priority` | Must be `low`/`medium`/`high`, otherwise `medium`              |
+| `due`      | Only `today`, `tomorrow`, `next-week`, or `YYYY-MM-DD`; else null |
+| `steps`    | Max 5; empty steps get a synthetic `Start: <title>` first step |
+| task count | Capped at 8                                                    |
+
+Unparseable output returns zero tasks rather than inventing tasks from prose.
+`frontend/src/api/plan.ts` applies the same rules again on the client, so a
+stale or modified backend still cannot corrupt the UI.
+
+### Prompting
+
+The request pins `response_mime_type: application/json` and passes a Pydantic
+`response_schema` (`PlanPayload`), so Gemini returns the exact shape above
+instead of a JSON-ish paragraph that needs regex recovery.

@@ -1,8 +1,11 @@
 """Offline task breakdown used when no Gemini API key is available.
 
-This is a local heuristic, not AI. It splits a brain dump into sentences and
-gives each one a small, startable action. Its purpose is to let the mobile app
-be developed and tested end to end before an API key exists.
+This is a local heuristic, not AI. Its job is to keep the app usable end to end
+with no key and no network, and to return exactly the same structured shape as
+the Gemini path so nothing downstream has to know the difference.
+
+Every task it produces still goes through the same Micro-Step Guard in
+``main.py``, so the two paths cannot drift apart.
 """
 
 import re
@@ -23,11 +26,67 @@ FILLER = re.compile(
     re.IGNORECASE,
 )
 
-MICRO_PREFIXES = [
-    "Start: ",
-    "Open: ",
-    "Draft: ",
-    "First 10 min of ",
+# Minutes by kind of work. Ordered: first match wins.
+MINUTES_RULES = [
+    (re.compile(r"\b(call|text|message|email|reply|pay|book|renew|confirm)\b", re.I), 10),
+    (re.compile(r"\b(send|submit|file|schedule|order|buy|pick up|return)\b", re.I), 15),
+    (re.compile(r"\b(clean|laundry|tidy|wash|sort|pack|organize|dishes)\b", re.I), 25),
+    (re.compile(r"\b(read|review|study|watch|listen|revise)\b", re.I), 30),
+    (re.compile(r"\b(gym|workout|exercise|run|walk|swim|train)\b", re.I), 40),
+    (re.compile(r"\b(write|draft|finish|build|fix|create|prepare|practice)\b", re.I), 45),
+]
+
+HIGH_ENERGY = re.compile(
+    r"\b(write|draft|study|finish|build|prepare|practice|revise|code|design)\b", re.I
+)
+LOW_ENERGY = re.compile(
+    r"\b(call|text|email|pay|buy|clean|laundry|sort|pack|tidy|wash|file)\b", re.I
+)
+
+URGENT = re.compile(r"\b(today|tonight|deadline|due|urgent|asap|before \d)\b", re.I)
+SOMEDAY = re.compile(r"\b(someday|maybe|eventually|at some point)\b", re.I)
+
+DUE_RULES = [
+    (re.compile(r"\b(today|tonight|this morning|this afternoon|this evening)\b", re.I), "today"),
+    (re.compile(r"\btomorrow\b", re.I), "tomorrow"),
+    (re.compile(r"\b(next week|this week|weekend|saturday|sunday)\b", re.I), "next-week"),
+]
+
+# Micro-step shapes by kind of work. These are generic on purpose: the offline
+# planner cannot know the specifics, so it names the first physical move.
+STEP_SHAPES = [
+    (
+        re.compile(r"\b(call|text|message|email|reply)\b", re.I),
+        ["Find the contact or thread", "Write the one thing you need to say", "Send it"],
+    ),
+    (
+        re.compile(r"\b(write|draft|finish|build|code|design)\b", re.I),
+        [
+            "Open the document at the right section",
+            "Work for 10 minutes without editing",
+            "Stop and note the next sentence",
+        ],
+    ),
+    (
+        re.compile(r"\b(read|review|study|revise)\b", re.I),
+        [
+            "Open the material at the right page",
+            "Read or review for 15 minutes",
+            "Write down one thing you learned",
+        ],
+    ),
+    (
+        re.compile(r"\b(clean|laundry|tidy|wash|sort|pack|organize|dishes)\b", re.I),
+        ["Collect what belongs together", "Do one pass only", "Stop when the timer ends"],
+    ),
+    (
+        re.compile(r"\b(buy|pay|order|book|pick up|return)\b", re.I),
+        ["Find the account, list, or item", "Do the one action", "Save the confirmation"],
+    ),
+    (
+        re.compile(r"\b(gym|workout|exercise|run|walk|swim|train)\b", re.I),
+        ["Put on what you need", "Start with 5 minutes", "Stop at your planned time"],
+    ),
 ]
 
 
@@ -54,15 +113,14 @@ def split_statements(text: str) -> list[str]:
     return statements
 
 
-def make_micro_step(statement: str, index: int) -> str:
-    """Turn a statement into one small, startable action."""
+def task_title(statement: str) -> str:
+    """Turn a statement into a title that starts with a verb."""
     if ACTION_HINTS.search(statement):
-        # Keep it actionable but small: name the first concrete move.
         verb_match = re.search(
             r"\b(finish|write|send|email|call|buy|clean|study|read|review|"
             r"prepare|submit|pay|pick up|do|fix|build|schedule|plan|reply|"
             r"meet|book|file|organize|pack|wash|cook|exercise|go|attend|"
-            r"take|make|create|update|check|handle|finish|start|finish)\b",
+            r"take|make|create|update|check|handle|start)\b",
             statement,
             re.IGNORECASE,
         )
@@ -70,14 +128,54 @@ def make_micro_step(statement: str, index: int) -> str:
             verb = verb_match.group(1).lower()
             rest = statement[verb_match.end() :].strip(" :,-")
             if rest:
-                return f"{verb.capitalize()}: {rest}"
+                return f"{verb.capitalize()} {rest}"
+    # No recognised verb: keep the statement but cap it so it stays scannable.
+    return statement[:1].upper() + statement[1:]
 
-    prefix = MICRO_PREFIXES[index % len(MICRO_PREFIXES)]
-    return f"{prefix}{statement}"
+
+def estimate_minutes(statement: str) -> int:
+    for pattern, minutes in MINUTES_RULES:
+        if pattern.search(statement):
+            return minutes
+    return 20
+
+
+def estimate_energy(statement: str) -> str:
+    if HIGH_ENERGY.search(statement):
+        return "high"
+    if LOW_ENERGY.search(statement):
+        return "low"
+    return "medium"
+
+
+def estimate_priority(statement: str) -> str:
+    if SOMEDAY.search(statement):
+        return "low"
+    if URGENT.search(statement):
+        return "high"
+    return "medium"
+
+
+def detect_due(statement: str) -> str | None:
+    for pattern, due in DUE_RULES:
+        if pattern.search(statement):
+            return due
+    return None
+
+
+def make_steps(statement: str) -> list[str]:
+    for pattern, steps in STEP_SHAPES:
+        if pattern.search(statement):
+            return list(steps)
+    return [
+        f"Decide the very first move for: {statement}",
+        "Do that move for 10 minutes",
+        "Stop and note what is next",
+    ]
 
 
 def breakdown(text: str) -> dict:
-    """Build an offline plan from a brain dump."""
+    """Build an offline plan from a brain dump, using the same task shape."""
     statements = split_statements(text)
 
     if not statements:
@@ -86,12 +184,23 @@ def breakdown(text: str) -> dict:
             "breakdown": "Nothing to plan yet. Add a few tasks to your brain dump.",
         }
 
-    tasks = [make_micro_step(s, i) for i, s in enumerate(statements)]
+    tasks = []
+    for statement in statements:
+        tasks.append(
+            {
+                "title": task_title(statement),
+                "minutes": estimate_minutes(statement),
+                "energy": estimate_energy(statement),
+                "priority": estimate_priority(statement),
+                "due": detect_due(statement),
+                "steps": make_steps(statement),
+            }
+        )
 
     breakdown_text = (
-        f"Offline mode: split your dump into {len(tasks)} startable step"
+        f"Offline mode: split your dump into {len(tasks)} startable task"
         f"{'s' if len(tasks) != 1 else ''}. "
-        "Set a real GEMINI_API_KEY in backend/.env to enable AI planning."
+        "Add a GEMINI_API_KEY to backend/.env to let Gemini do this."
     )
 
     return {"tasks": tasks, "breakdown": breakdown_text}

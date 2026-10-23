@@ -12,6 +12,24 @@ frontend/  React Native + Expo + TypeScript   (mobile UI, check-ins, task cards)
 backend/   Python + FastAPI + google-genai    (AI calls, validation, planning)
 ```
 
+## The core loop
+
+```
+Dump  ->  Confirm  ->  Reality Check  ->  Today
+```
+
+- **Dump** - say everything on your mind, however messy.
+- **Confirm** - review what was extracted, tune it, drop what is not real.
+- **Reality Check** - set your available hours and energy. It never
+  auto-schedules: it measures your workload against what you can realistically
+  do, then proposes the fewest moves that make the day fit ("you have six hours
+  of tasks but only three available - move the lowest-priority one to
+  tomorrow").
+- **Today** - your steps, sized to start in under ten minutes.
+
+Screens live in `frontend/app/` as files, so the navigation structure is the
+file tree. See `frontend/README.md` for the map.
+
 ## Quick start (no Android phone required)
 
 You can develop and test everything in a web browser. The code stays
@@ -46,6 +64,9 @@ npx expo start --web
 ```
 
 Open http://localhost:8081 and type a brain dump.
+
+Navigation on web: `Today` / `Dump` / `Plan` / `You` along the bottom, plus
+the `Confirm`, `Reality Check`, and task detail screens that open on top.
 
 ### 3. Test the API directly
 
