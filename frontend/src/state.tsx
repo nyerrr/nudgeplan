@@ -40,7 +40,7 @@ import {
   snoozeTaskNudge,
 } from './lib/notifications';
 import { clearState, loadState, saveState } from './lib/storage';
-import { palettes, type Palette } from './theme';
+import { paletteFor, type Palette } from './theme';
 import type {
   AiStatus,
   AppState,
@@ -320,7 +320,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ? 'dark'
         : 'light'
       : state.theme;
-  const colors = palettes[mode];
+  const colors = paletteFor(mode);
 
   const snapshot = useCallback(() => {
     snapshotRef.current = JSON.stringify(stateRef.current.tasks);

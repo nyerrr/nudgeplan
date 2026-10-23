@@ -70,7 +70,7 @@ export function CheckInScreen() {
           mine
             ? {
                 alignSelf: 'flex-end',
-                backgroundColor: colors.brand,
+                backgroundColor: colors.accent,
                 borderBottomRightRadius: 6,
               }
             : {
@@ -86,7 +86,7 @@ export function CheckInScreen() {
           style={[
             type.body,
             {
-              color: mine ? colors.onBrand : colors.ink,
+              color: mine ? colors.onAccent : colors.ink,
               fontFamily: fonts.regular,
             },
           ]}
@@ -200,6 +200,7 @@ export function CheckInScreen() {
         contentContainerStyle={styles.chat}
         keyboardShouldPersistTaps="handled"
         accessibilityLiveRegion="polite"
+        showsVerticalScrollIndicator={false}
       >
         {state.chat.map(renderMessage)}
         {typing ? (

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -37,6 +38,7 @@ export function FocusScreen() {
   } = useApp();
   const [stepText, setStepText] = useState('');
   const [breaking, setBreaking] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const candidates = sortedTasks(state.tasks, 'today').filter(
     (task) => !task.done,
@@ -82,6 +84,7 @@ export function FocusScreen() {
       style={{ backgroundColor: colors.bg }}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
     >
       <Text style={[type.title, { color: colors.ink }]}>Focus</Text>
       <Text style={[type.sub, { color: colors.muted, marginTop: 2 }]}>
@@ -106,44 +109,141 @@ export function FocusScreen() {
               {candidates.length} open
             </Text>
           </View>
-          <View style={styles.picker}>
-            {candidates.map((task) => {
-              const active = task.id === selected.id;
-              return (
-                <Pressable
-                  key={task.id}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  aria-selected={active}
-                  accessibilityLabel={`Focus on ${task.title}`}
-                  onPress={() => setFocus(task.id)}
-                  style={[
-                    styles.pickChip,
-                    {
-                      backgroundColor: active ? colors.brand : colors.surface,
-                      borderColor: active ? colors.brand : colors.line,
-                    },
-                  ]}
-                >
-                  <Icon
-                    name={active ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={15}
-                    color={active ? colors.onBrand : colors.muted}
-                  />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Selected task: ${selected.title}`}
+            accessibilityHint="Opens the task picker"
+            onPress={() => setPickerOpen(true)}
+            style={({ pressed }) => [
+              styles.taskPicker,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.line,
+                opacity: pressed ? 0.82 : 1,
+              },
+            ]}
+          >
+            <View style={styles.taskPickerText}>
+              <Text
+                style={{
+                  color: colors.ink,
+                  fontFamily: fonts.semibold,
+                  fontSize: 13.5,
+                }}
+                numberOfLines={1}
+              >
+                {selected.title}
+              </Text>
+              <Text
+                style={{
+                  color: colors.muted,
+                  fontFamily: fonts.regular,
+                  fontSize: 12,
+                  marginTop: 2,
+                }}
+              >
+                {fmtDuration(selected.dur)} · {selected.steps.length} steps
+              </Text>
+            </View>
+            <Icon name="chevron-down" size={18} color={colors.brand} />
+          </Pressable>
+
+          <Modal
+            visible={pickerOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setPickerOpen(false)}
+          >
+            <View style={[styles.pickerOverlay, { backgroundColor: colors.overlay }]}>
+              <Pressable
+                accessibilityLabel="Close task picker"
+                style={StyleSheet.absoluteFill}
+                onPress={() => setPickerOpen(false)}
+              />
+              <View
+                style={[
+                  styles.pickerModal,
+                  { backgroundColor: colors.surface, borderColor: colors.line },
+                ]}
+              >
+                <View style={styles.pickerModalHead}>
                   <Text
                     style={{
-                      color: active ? colors.onBrand : colors.ink,
-                      fontFamily: fonts.medium,
-                      fontSize: 12.5,
+                      color: colors.ink,
+                      fontFamily: fonts.bold,
+                      fontSize: 16,
                     }}
-                    numberOfLines={1}
                   >
-                    {task.title}
+                    Choose a task
                   </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Close task picker"
+                    onPress={() => setPickerOpen(false)}
+                    style={styles.closePicker}
+                  >
+                    <Icon name="close" size={18} color={colors.ink} />
+                  </Pressable>
+                </View>
+                <View style={styles.pickerOptions}>
+                  {candidates.map((task) => {
+                    const active = task.id === selected.id;
+                    return (
+                      <Pressable
+                        key={task.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        aria-selected={active}
+                        accessibilityLabel={`Focus on ${task.title}`}
+                        onPress={() => {
+                          setFocus(task.id);
+                          setPickerOpen(false);
+                        }}
+                        style={[
+                          styles.pickerOption,
+                          {
+                            backgroundColor: active
+                              ? colors.accent
+                              : colors.surface2,
+                            borderColor: active ? colors.accent : colors.line,
+                          },
+                        ]}
+                      >
+                        <View style={styles.taskPickerText}>
+                          <Text
+                            style={{
+                              color: active ? colors.onAccent : colors.ink,
+                              fontFamily: active ? fonts.bold : fonts.medium,
+                              fontSize: 13,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {task.title}
+                          </Text>
+                          <Text
+                            style={{
+                              color: active ? colors.onAccent : colors.muted,
+                              fontFamily: fonts.regular,
+                              fontSize: 11.5,
+                              marginTop: 2,
+                              opacity: 0.8,
+                            }}
+                          >
+                            {fmtDuration(task.dur)} · {task.steps.length} steps
+                          </Text>
+                        </View>
+                        <Icon
+                          name={active ? 'checkmark-circle' : 'ellipse-outline'}
+                          size={18}
+                          color={active ? colors.onAccent : colors.brand}
+                        />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+          </Modal>
 
           <Card style={{ marginTop: 14 }}>
             <View style={styles.spread}>
@@ -412,20 +512,52 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 8,
   },
-  picker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  pickChip: {
+  taskPicker: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'space-between',
     borderWidth: 1,
     borderRadius: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  taskPickerText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  pickerOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  pickerModal: {
+    width: '100%',
+    maxWidth: 460,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+  },
+  pickerModalHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  closePicker: {
+    padding: 4,
+  },
+  pickerOptions: {
+    gap: 8,
+  },
+  pickerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
     paddingHorizontal: 11,
-    maxWidth: '100%',
   },
   spread: {
     flexDirection: 'row',

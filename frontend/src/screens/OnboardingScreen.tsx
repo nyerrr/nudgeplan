@@ -86,6 +86,7 @@ export function OnboardingScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.top}>
           {step > 0 ? (
@@ -310,7 +311,7 @@ export function OnboardingScreen() {
                     <Text
                       style={{
                         color: active ? colors.onBrand : colors.ink,
-                        fontFamily: fonts.medium,
+                        fontFamily: active ? fonts.bold : fonts.medium,
                         fontSize: 12.5,
                       }}
                     >
@@ -348,7 +349,7 @@ export function OnboardingScreen() {
                     <Text
                       style={{
                         color: active ? colors.onBrand : colors.ink,
-                        fontFamily: fonts.medium,
+                        fontFamily: active ? fonts.bold : fonts.medium,
                         fontSize: 12.5,
                       }}
                     >

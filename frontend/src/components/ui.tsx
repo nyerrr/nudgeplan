@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 
 import { useApp } from '../state';
-import { effortColor, effortLabel, fonts, type } from '../theme';
+import { effortLabel, fonts, type } from '../theme';
 import type { Effort } from '../types';
 import { Icon, type IoniconName } from './Icon';
 
@@ -84,7 +84,8 @@ export function Button({
 }: ButtonProps) {
   const { colors } = useApp();
   const bg = background ?? (ghost || danger ? 'transparent' : colors.brand);
-  const fg = foreground ?? (danger ? colors.warn : colors.onBrand);
+  const fg =
+    foreground ?? (danger ? colors.warn : ghost ? colors.brand : colors.onBrand);
   const border = outline ?? (danger ? colors.warn : ghost ? colors.brand : 'transparent');
 
   return (
@@ -110,7 +111,7 @@ export function Button({
         <Text
           style={{
             color: fg,
-            fontFamily: fonts.semibold,
+            fontFamily: fonts.bold,
             fontSize: small ? 13 : 14,
           }}
         >
@@ -166,7 +167,7 @@ export function Segmented<T extends string | number>({
             <Text
               style={{
                 color: active ? colors.onBrand : colors.muted,
-                fontFamily: fonts.semibold,
+                fontFamily: active ? fonts.bold : fonts.semibold,
                 fontSize: 13,
               }}
             >
@@ -192,12 +193,14 @@ export function Meter({
   height?: number;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { colors } = useApp();
+
   return (
     <View
       style={[
         styles.meter,
         {
-          backgroundColor: track ?? 'rgba(0,0,0,.16)',
+          backgroundColor: track ?? colors.line,
           height,
           borderRadius: height,
         },
@@ -218,12 +221,10 @@ export function Meter({
 
 export function EffortPill({ effort }: { effort: Effort }) {
   const { colors } = useApp();
-  const color = effortColor(colors, effort);
   return (
     <View
       style={{
-        borderWidth: 1.5,
-        borderColor: color,
+        backgroundColor: colors.accent,
         borderRadius: 99,
         paddingHorizontal: 9,
         paddingVertical: 2,
@@ -232,7 +233,7 @@ export function EffortPill({ effort }: { effort: Effort }) {
     >
       <Text
         style={{
-          color,
+          color: colors.onAccent,
           fontFamily: fonts.semibold,
           fontSize: 11,
         }}

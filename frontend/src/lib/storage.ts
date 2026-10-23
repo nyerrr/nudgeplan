@@ -78,6 +78,7 @@ function normalise(raw: Record<string, unknown>): AppState | null {
       typeof raw.nudgeLeadMin === 'number' ? raw.nudgeLeadMin : base.nudgeLeadMin,
     theme:
       raw.theme === 'light' || raw.theme === 'dark' ? raw.theme : 'auto',
+    themeScheme: 'clean-mist',
     view: raw.view === 'tomorrow' ? 'tomorrow' : 'today',
     focusId: typeof raw.focusId === 'string' ? raw.focusId : null,
     chat: Array.isArray(raw.chat) ? raw.chat : [],

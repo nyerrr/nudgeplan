@@ -1,4 +1,5 @@
 export type ThemeMode = 'auto' | 'light' | 'dark';
+export type ThemeScheme = 'clean-mist';
 export type ResolvedTheme = 'light' | 'dark';
 export type Energy = 'low' | 'medium' | 'high';
 export type Effort = 'low' | 'med' | 'high';
@@ -114,6 +115,7 @@ export interface AppState {
   nudges: boolean;
   nudgeLeadMin: number;
   theme: ThemeMode;
+  themeScheme: ThemeScheme;
   view: Day;
   focusId: string | null;
   chat: ChatMessage[];

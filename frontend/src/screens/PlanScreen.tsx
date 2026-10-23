@@ -38,6 +38,7 @@ export function PlanScreen() {
     <ScrollView
       style={{ backgroundColor: colors.bg }}
       contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
     >
       <View style={styles.head}>
         <View>
@@ -76,8 +77,7 @@ export function PlanScreen() {
           </Text>
           <View
             style={{
-              borderWidth: 1.5,
-              borderColor: percent > 100 ? colors.warn : colors.med,
+              backgroundColor: colors.accent,
               borderRadius: 99,
               paddingHorizontal: 9,
               paddingVertical: 2,
@@ -85,7 +85,7 @@ export function PlanScreen() {
           >
             <Text
               style={{
-                color: percent > 100 ? colors.warn : colors.med,
+                color: colors.onAccent,
                 fontFamily: fonts.semibold,
                 fontSize: 11,
               }}

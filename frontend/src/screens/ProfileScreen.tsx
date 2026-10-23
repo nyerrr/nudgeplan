@@ -54,6 +54,7 @@ export function ProfileScreen() {
     <ScrollView
       style={{ backgroundColor: colors.bg }}
       contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
       <BackButton label="Home" onPress={() => go('home')} />
@@ -195,6 +196,7 @@ export function ProfileScreen() {
           value={state.theme}
           onChange={setThemeMode}
         />
+
       </Card>
 
       <Label>Notifications</Label>
@@ -431,7 +433,6 @@ const styles = StyleSheet.create({
   },
   chips: {
     gap: 8,
-    paddingRight: 18,
   },
   chip: {
     borderWidth: 1,

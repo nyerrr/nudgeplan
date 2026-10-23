@@ -133,7 +133,10 @@ export function TaskSheet() {
               },
             ]}
           >
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               <View style={styles.head}>
                 <Text
                   style={[
@@ -199,7 +202,7 @@ export function TaskSheet() {
                       <Text
                         style={{
                           color: active ? colors.onBrand : colors.ink,
-                          fontFamily: fonts.medium,
+                          fontFamily: active ? fonts.bold : fonts.medium,
                           fontSize: 12.5,
                         }}
                       >

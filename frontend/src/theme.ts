@@ -24,51 +24,58 @@ export interface Palette {
   overlay: string;
 }
 
-const light: Palette = {
-  bg: '#F3F5FF',
-  glow: '#D5D9F8',
-  surface: '#FFFFFF',
-  surface2: '#EAEDFF',
-  ink: '#0A1160',
-  muted: '#5F6694',
-  line: '#DEE1F6',
-  brand: '#2433B8',
+const cleanMistLight: Palette = {
+  bg: '#F4F7FA',
+  glow: '#E3EAF2',
+  surface: '#E3EAF2',
+  surface2: '#D7E2EE',
+  ink: '#0F172A',
+  muted: '#475569',
+  line: '#94A3B8',
+  brand: '#2563EB',
   onBrand: '#FFFFFF',
-  accent: '#00BF9A',
-  onAccent: '#00302A',
-  warn: '#E5604D',
-  onWarn: '#3A0B05',
-  high: '#3D32C8',
-  med: '#0A8F7C',
-  low: '#8A90C7',
-  bezel: '#0B0E3D',
-  shadow: 'rgba(10,20,100,.18)',
-  overlay: 'rgba(8,12,70,.45)',
+  accent: '#3F8EFC',
+  onAccent: '#0F172A',
+  warn: '#B91C1C',
+  onWarn: '#FFFFFF',
+  high: '#2563EB',
+  med: '#3F8EFC',
+  low: '#64748B',
+  bezel: '#94A3B8',
+  shadow: 'rgba(15,23,42,.12)',
+  overlay: 'rgba(15,23,42,.4)',
 };
 
-const dark: Palette = {
-  bg: '#0F133D',
-  glow: '#2932A3',
-  surface: '#191F66',
-  surface2: '#222978',
-  ink: '#F1F3FF',
-  muted: '#BCC1EE',
-  line: '#383F9C',
-  brand: '#5A64FF',
-  onBrand: '#FFFFFF',
-  accent: '#37DCB8',
-  onAccent: '#002A22',
-  warn: '#FF9F90',
-  onWarn: '#3A0B05',
-  high: '#A5A0FF',
-  med: '#37DCB8',
-  low: '#969CD6',
-  bezel: '#000000',
-  shadow: 'rgba(0,0,0,.45)',
-  overlay: 'rgba(3,6,35,.55)',
+const cleanMistDark: Palette = {
+  bg: '#0F172A',
+  glow: '#1E293B',
+  surface: '#1E293B',
+  surface2: '#334155',
+  ink: '#F3F4F6',
+  muted: '#CBD5E1',
+  line: '#64748B',
+  brand: '#60A5FA',
+  onBrand: '#0F172A',
+  accent: '#93C5FD',
+  onAccent: '#0F172A',
+  warn: '#FCA5A5',
+  onWarn: '#450A0A',
+  high: '#60A5FA',
+  med: '#93C5FD',
+  low: '#94A3B8',
+  bezel: '#020617',
+  shadow: 'rgba(2,6,23,.45)',
+  overlay: 'rgba(2,6,23,.72)',
 };
 
-export const palettes: Record<ResolvedTheme, Palette> = { light, dark };
+export const palettes: Record<ResolvedTheme, Palette> = {
+  light: cleanMistLight,
+  dark: cleanMistDark,
+};
+
+export function paletteFor(mode: ResolvedTheme): Palette {
+  return palettes[mode];
+}
 
 export const fonts = {
   light: 'Poppins_300Light',

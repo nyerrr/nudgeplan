@@ -47,6 +47,7 @@ export function InsightsScreen() {
     <ScrollView
       style={{ backgroundColor: colors.bg }}
       contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
     >
       <Text style={[type.title, { color: colors.ink }]}>Insights</Text>
       <Text style={[type.sub, { color: colors.muted, marginTop: 2 }]}>

@@ -74,6 +74,7 @@ export function HomeScreen() {
       style={{ backgroundColor: colors.bg }}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
     >
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
@@ -157,13 +158,16 @@ export function HomeScreen() {
       <View
         style={[
           styles.reality,
-          { backgroundColor: reality.over ? colors.warn : colors.accent },
+          {
+            backgroundColor: reality.over ? '#FEE2E2' : colors.surface2,
+            borderLeftColor: reality.over ? colors.warn : colors.brand,
+          },
         ]}
       >
         <Text
           style={[
             styles.realityK,
-            { color: reality.over ? colors.onWarn : colors.onAccent },
+            { color: reality.over ? '#7F1D1D' : colors.ink },
           ]}
         >
           REALITY CHECK
@@ -171,22 +175,21 @@ export function HomeScreen() {
         <Text
           style={[
             styles.realityT,
-            { color: reality.over ? colors.onWarn : colors.onAccent },
+            { color: reality.over ? '#7F1D1D' : colors.ink },
           ]}
         >
           {reality.message}
         </Text>
         <Meter
           percent={reality.percent}
-          color={reality.over ? colors.onWarn : colors.onAccent}
-          track="rgba(0,0,0,.16)"
+          color={reality.over ? colors.warn : colors.accent}
+          track={colors.line}
         />
         <Text
           style={[
             type.hint,
             {
-              color: reality.over ? colors.onWarn : colors.onAccent,
-              opacity: 0.85,
+              color: reality.over ? '#7F1D1D' : colors.muted,
               marginTop: 6,
               fontFamily: fonts.regular,
             },
@@ -200,16 +203,16 @@ export function HomeScreen() {
             <Button
               small
               label={`Move ${moveCount} to tomorrow`}
-              background={reality.over ? colors.onWarn : colors.onAccent}
-              foreground={reality.over ? colors.warn : colors.accent}
+              background={reality.over ? colors.warn : colors.brand}
+              foreground="#FFFFFF"
               onPress={() => moveN(moveCount)}
             />
             <Button
               small
               ghost
               label="Keep it"
-              foreground={reality.over ? colors.onWarn : colors.onAccent}
-              outline={reality.over ? colors.onWarn : colors.onAccent}
+              foreground={reality.over ? '#7F1D1D' : colors.brand}
+              outline={reality.over ? colors.warn : colors.brand}
               onPress={() => notify('Okay. I will check your load again at midday.')}
             />
           </View>
@@ -341,6 +344,7 @@ const styles = StyleSheet.create({
   },
   reality: {
     borderRadius: 18,
+    borderLeftWidth: 4,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginTop: 14,

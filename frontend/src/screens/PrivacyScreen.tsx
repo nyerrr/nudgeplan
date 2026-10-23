@@ -39,6 +39,7 @@ export function PrivacyScreen() {
     <ScrollView
       style={{ backgroundColor: colors.bg }}
       contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
     >
       <BackButton label="Profile" onPress={() => go('profile')} />
       <Text style={[type.title, { color: colors.ink }]}>Privacy</Text>
