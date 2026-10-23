@@ -12,7 +12,8 @@ import {
 
 import { Icon } from '../components/Icon';
 import { Button } from '../components/ui';
-import { DEMO_CHIPS, useApp } from '../state';
+import { useVoiceInput } from '../lib/useVoiceInput';
+import { useApp } from '../state';
 import { fonts, type } from '../theme';
 import type { ChatCta, ChatMessage } from '../types';
 
@@ -24,12 +25,14 @@ export function CheckInScreen() {
     sendCheckIn,
     go,
     moveN,
-    voiceSample,
   } = useApp();
   const [text, setText] = useState('');
-  const [listening, setListening] = useState(false);
+  const { listening, start, supported } = useVoiceInput({
+    onTranscript: (value) => {
+      setText((current) => (current.trim() ? `${current} ${value}` : value));
+    },
+  });
   const chatRef = useRef<React.ComponentRef<typeof ScrollView> | null>(null);
-  const micTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -37,13 +40,6 @@ export function CheckInScreen() {
     }, 60);
     return () => clearTimeout(id);
   }, [state.chat.length, typing]);
-
-  useEffect(
-    () => () => {
-      if (micTimer.current) clearTimeout(micTimer.current);
-    },
-    [],
-  );
 
   const submit = () => {
     if (!text.trim()) return;
@@ -53,12 +49,8 @@ export function CheckInScreen() {
   };
 
   const listen = () => {
-    if (listening) return;
-    setListening(true);
-    micTimer.current = setTimeout(() => {
-      setText(voiceSample());
-      setListening(false);
-    }, 1600);
+    if (!supported) return;
+    void start();
   };
 
   const onCta = (cta: ChatCta) => {
@@ -173,7 +165,12 @@ export function CheckInScreen() {
           contentContainerStyle={styles.chips}
           keyboardShouldPersistTaps="handled"
         >
-          {DEMO_CHIPS.map((chip) => (
+          {[
+            'Finish the quarterly report 2h, call the dentist, reply to Sam\'s email, gym at 6pm',
+            "I'm tired today. Study for the chem exam 90m, laundry",
+            'Tomorrow: write the essay intro, buy groceries',
+            "I'm stuck on the budget spreadsheet",
+          ].map((chip) => (
             <Pressable
               key={chip}
               accessibilityRole="button"
@@ -250,10 +247,18 @@ export function CheckInScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Voice input"
+            disabled={!supported}
             onPress={listen}
             style={[
               styles.round,
-              { backgroundColor: listening ? colors.warn : colors.surface2 },
+              {
+                backgroundColor: listening
+                  ? colors.warn
+                  : supported
+                    ? colors.surface2
+                    : colors.line,
+                opacity: supported ? 1 : 0.5,
+              },
             ]}
           >
             <Icon

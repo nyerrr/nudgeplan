@@ -10,6 +10,7 @@ export type Screen =
   | 'focus'
   | 'insights'
   | 'profile'
+  | 'privacy'
   | 'about';
 
 export interface Step {

@@ -29,15 +29,28 @@ export function speechRecognitionAvailable(): boolean {
   }
 }
 
-export function useVoiceInput({ onTranscript, onError }: VoiceInputOptions) {
+export function useVoiceInput({
+  onTranscript,
+  onResult,
+  onError,
+}: VoiceInputOptions & { onResult?: (transcript: string) => void }) {
   const [listening, setListening] = useState(false);
+  const [supported, setSupported] = useState(false);
+
+  const handleTranscript = useCallback(
+    (transcript: string) => {
+      onTranscript?.(transcript);
+      onResult?.(transcript);
+    },
+    [onResult, onTranscript],
+  );
 
   useSpeechRecognitionEvent('start', () => setListening(true));
   useSpeechRecognitionEvent('end', () => setListening(false));
 
   useSpeechRecognitionEvent('result', (event) => {
     const transcript = event.results?.[0]?.transcript ?? '';
-    if (transcript.trim()) onTranscript(transcript.trim());
+    if (transcript.trim()) handleTranscript(transcript.trim());
   });
 
   useSpeechRecognitionEvent('error', (event) => {
@@ -51,7 +64,9 @@ export function useVoiceInput({ onTranscript, onError }: VoiceInputOptions) {
 
   const start = useCallback(async () => {
     try {
-      if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+      const available = ExpoSpeechRecognitionModule.isRecognitionAvailable();
+      setSupported(available);
+      if (!available) {
         onError?.(
           'Voice input is not available here. In Expo Go, use a development build (or the web app) to dictate.',
         );
@@ -77,7 +92,7 @@ export function useVoiceInput({ onTranscript, onError }: VoiceInputOptions) {
         'Voice input needs a development build on Android and iOS. The web app can dictate in Chrome or Edge.',
       );
     }
-  }, [onError]);
+  }, [handleTranscript, onError]);
 
   const stop = useCallback(() => {
     try {
@@ -87,5 +102,5 @@ export function useVoiceInput({ onTranscript, onError }: VoiceInputOptions) {
     }
   }, []);
 
-  return { listening, start, stop };
+  return { listening, start, stop, supported };
 }

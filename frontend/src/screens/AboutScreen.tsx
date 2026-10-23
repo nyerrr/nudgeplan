@@ -52,16 +52,16 @@ const FEATURES: Array<{
 
 const PHASES = [
   [
-    'Alpha Launch and Validation',
-    'Weeks 1 to 4. Build a working prototype and test the core mechanics.',
+    'Build and validate',
+    'Develop the core planner, focus tools, and local-first data model.',
   ],
   [
-    'Local Rollout, Peer Testing',
-    'Weeks 5 to 8. Validate the app with students and classmates.',
+    'Polish and test',
+    'Harden reliability, accessibility, and run automated checks.',
   ],
   [
-    'Feedback and Iteration',
-    'Weeks 9 to 12. Analyze user interaction, improve the app and prepare the final documentation.',
+    'Ship',
+    'Prepare for release with clear docs and stable behavior.',
   ],
 ];
 

@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
+  Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 
-import { Icon, type IoniconName } from '../components/Icon';
+import { Icon } from '../components/Icon';
 import {
   BackButton,
   Card,
@@ -21,44 +24,6 @@ import { useApp } from '../state';
 import { fonts, type } from '../theme';
 import type { ThemeMode } from '../types';
 
-const DEMOS: Array<{
-  id: string;
-  icon: IoniconName;
-  title: string;
-  description: string;
-}> = [
-  {
-    id: 'dump',
-    icon: 'chatbubble-ellipses-outline',
-    title: 'Brain dump a day',
-    description: 'Send a messy list and watch it become a plan.',
-  },
-  {
-    id: 'overload',
-    icon: 'shield-checkmark-outline',
-    title: 'Overload the day',
-    description: 'Push past 100% and meet the Reality Check.',
-  },
-  {
-    id: 'stuck',
-    icon: 'footsteps-outline',
-    title: 'Get unstuck',
-    description: 'Turn one heavy task into small steps.',
-  },
-  {
-    id: 'tired',
-    icon: 'flash-outline',
-    title: 'Report low energy',
-    description: 'Capacity shrinks and heavy work moves.',
-  },
-  {
-    id: 'reset',
-    icon: 'close',
-    title: 'Reset the demo',
-    description: 'Restore the starting data.',
-  },
-];
-
 export function ProfileScreen() {
   const {
     state,
@@ -68,7 +33,13 @@ export function ProfileScreen() {
     setHours,
     toggleNudges,
     setThemeMode,
-    demo,
+    exportData,
+    resetApp,
+    testNudge,
+    storageWarning,
+    aiStatus,
+    aiInfo,
+    checkAi,
   } = useApp();
   const [nameDraft, setNameDraft] = useState(state.name);
 
@@ -226,6 +197,179 @@ export function ProfileScreen() {
         />
       </Card>
 
+      <Label>Notifications</Label>
+      <Card style={{ paddingVertical: 2 }}>
+        <View style={[styles.linkrow, { paddingVertical: 10 }]}>
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                color: colors.ink,
+                fontFamily: fonts.semibold,
+                fontSize: 14,
+              }}
+            >
+              Send a test nudge
+            </Text>
+            <Text
+              style={{
+                color: colors.muted,
+                fontFamily: fonts.regular,
+                fontSize: 12.5,
+              }}
+            >
+              Check notification permissions on this device
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void testNudge()}
+            style={[
+              styles.smallBtn,
+              { backgroundColor: colors.surface2, borderColor: colors.line },
+            ]}
+          >
+            <Text
+              style={{
+                color: colors.ink,
+                fontFamily: fonts.semibold,
+                fontSize: 13,
+              }}
+            >
+              Test
+            </Text>
+          </Pressable>
+        </View>
+      </Card>
+
+      <Label>AI status</Label>
+      <Card>
+        <View style={{ gap: 6 }}>
+          <Text
+            style={{
+              color: colors.ink,
+              fontFamily: fonts.semibold,
+              fontSize: 14,
+            }}
+          >
+            Backend: {aiStatus === 'online' ? 'Online' : 'Offline'}
+          </Text>
+          <Text
+            style={{
+              color: colors.muted,
+              fontFamily: fonts.regular,
+              fontSize: 13,
+            }}
+          >
+            {aiInfo
+              ? `Model: ${aiInfo.model} • Mock: ${aiInfo.mock_mode ? 'yes' : 'no'}`
+              : 'Checking connection...'}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void checkAi()}
+            style={[
+              styles.smallBtn,
+              {
+                alignSelf: 'flex-start',
+                marginTop: 4,
+                backgroundColor: colors.surface2,
+                borderColor: colors.line,
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color: colors.ink,
+                fontFamily: fonts.semibold,
+                fontSize: 13,
+              }}
+            >
+              Recheck
+            </Text>
+          </Pressable>
+        </View>
+      </Card>
+
+      <Label>Data</Label>
+      <Card style={{ paddingVertical: 2 }}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={async () => {
+            const json = exportData();
+            try {
+              await Share.share({
+                message: json,
+                title: 'NudgePlan data export',
+              });
+            } catch {
+              if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
+                try {
+                  await navigator.clipboard?.writeText(json);
+                  Alert.alert('Copied', 'Export JSON copied to clipboard.');
+                } catch {
+                  Alert.alert('Export', 'Copy this data manually.');
+                }
+              } else {
+                Alert.alert('Export', json.slice(0, 200) + (json.length > 200 ? '...' : ''));
+              }
+            }
+          }}
+          style={styles.linkrow}
+        >
+          <Text
+            style={{
+              color: colors.ink,
+              fontFamily: fonts.semibold,
+              fontSize: 14,
+            }}
+          >
+            Export data
+          </Text>
+          <Icon name="share-outline" size={18} color={colors.muted} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            Alert.alert(
+              'Delete all data',
+              'This removes all tasks, history, and settings from this device. This cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => void resetApp(),
+                },
+              ],
+            );
+          }}
+          style={[styles.linkrow, { borderTopWidth: 1, borderTopColor: colors.line }]}
+        >
+          <Text
+            style={{
+              color: colors.warn,
+              fontFamily: fonts.semibold,
+              fontSize: 14,
+            }}
+          >
+            Delete all data
+          </Text>
+          <Icon name="trash-outline" size={18} color={colors.warn} />
+        </Pressable>
+      </Card>
+      {storageWarning ? (
+        <Text
+          style={{
+            color: colors.warn,
+            fontFamily: fonts.regular,
+            fontSize: 12.5,
+            marginTop: 8,
+          }}
+        >
+          Storage warning: changes may not be saved fully on this device.
+        </Text>
+      ) : null}
+
       <Label>About</Label>
       <Card style={{ paddingVertical: 2 }}>
         <Pressable
@@ -244,48 +388,23 @@ export function ProfileScreen() {
           </Text>
           <Icon name="chevron-forward" size={18} color={colors.muted} />
         </Pressable>
-      </Card>
-
-      <Label>Try the prototype</Label>
-      <View style={styles.demos}>
-        {DEMOS.map((item) => (
-          <Pressable
-            key={item.id}
-            accessibilityRole="button"
-            onPress={() => demo(item.id)}
-            style={({ pressed }) => [
-              styles.demo,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.line,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => go('privacy')}
+          style={[styles.linkrow, { borderTopWidth: 1, borderTopColor: colors.line }]}
+        >
+          <Text
+            style={{
+              color: colors.ink,
+              fontFamily: fonts.semibold,
+              fontSize: 14,
+            }}
           >
-            <Icon name={item.icon} size={22} color={colors.brand} />
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  color: colors.ink,
-                  fontFamily: fonts.semibold,
-                  fontSize: 14,
-                }}
-              >
-                {item.title}
-              </Text>
-              <Text
-                style={{
-                  color: colors.muted,
-                  fontFamily: fonts.regular,
-                  fontSize: 12.5,
-                }}
-              >
-                {item.description}
-              </Text>
-            </View>
-          </Pressable>
-        ))}
-      </View>
+            Privacy
+          </Text>
+          <Icon name="chevron-forward" size={18} color={colors.muted} />
+        </Pressable>
+      </Card>
     </ScrollView>
   );
 }
@@ -335,16 +454,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
   },
-  demos: {
-    gap: 8,
-  },
-  demo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  smallBtn: {
     borderWidth: 1,
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
   },
 });

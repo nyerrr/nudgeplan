@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -25,6 +25,7 @@ import {
   realityCheck,
   sortedTasks,
 } from '../lib/engine';
+import { useVoiceInput } from '../lib/useVoiceInput';
 import { useApp } from '../state';
 import { fonts, type } from '../theme';
 import type { Energy } from '../types';
@@ -39,18 +40,14 @@ export function HomeScreen() {
     notify,
     setFocus,
     moveN,
-    voiceSample,
+    snoozeNudge,
   } = useApp();
   const [text, setText] = useState('');
-  const [listening, setListening] = useState(false);
-  const micTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (micTimer.current) clearTimeout(micTimer.current);
+  const { listening, start, supported } = useVoiceInput({
+    onTranscript: (value) => {
+      setText((current) => (current.trim() ? `${current} ${value}` : value));
     },
-    [],
-  );
+  });
 
   const reality = realityCheck(state);
   const upNext = sortedTasks(state.tasks, 'today')
@@ -66,12 +63,8 @@ export function HomeScreen() {
   };
 
   const listen = () => {
-    if (listening) return;
-    setListening(true);
-    micTimer.current = setTimeout(() => {
-      setText(voiceSample());
-      setListening(false);
-    }, 1600);
+    if (!supported) return;
+    void start();
   };
 
   const moveCount = reality.over ? reality.moves : 1;
@@ -131,11 +124,17 @@ export function HomeScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Voice input"
+          disabled={!supported}
           onPress={listen}
           style={[
             styles.round,
             {
-              backgroundColor: listening ? colors.warn : colors.surface2,
+              backgroundColor: listening
+                ? colors.warn
+                : supported
+                  ? colors.surface2
+                  : colors.line,
+              opacity: supported ? 1 : 0.5,
             },
           ]}
         >

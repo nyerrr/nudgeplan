@@ -23,7 +23,9 @@ import { CheckInScreen } from './src/screens/CheckInScreen';
 import { FocusScreen } from './src/screens/FocusScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { InsightsScreen } from './src/screens/InsightsScreen';
+import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { PlanScreen } from './src/screens/PlanScreen';
+import { PrivacyScreen } from './src/screens/PrivacyScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { AppProvider, useApp } from './src/state';
 
@@ -40,6 +42,8 @@ function CurrentScreen() {
       return <InsightsScreen />;
     case 'profile':
       return <ProfileScreen />;
+    case 'privacy':
+      return <PrivacyScreen />;
     case 'about':
       return <AboutScreen />;
     default:
@@ -48,10 +52,23 @@ function CurrentScreen() {
 }
 
 function Root() {
-  const { hydrated, colors, mode } = useApp();
+  const { hydrated, colors, mode, state } = useApp();
 
   if (!hydrated) {
     return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  }
+
+  if (!state.onboarded) {
+    return (
+      <SafeAreaView
+        edges={['top', 'bottom', 'left', 'right']}
+        style={{ flex: 1, backgroundColor: colors.bg }}
+      >
+        <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
+        <OnboardingScreen />
+        <Toast />
+      </SafeAreaView>
+    );
   }
 
   return (

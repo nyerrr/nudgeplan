@@ -214,6 +214,10 @@ export async function cancelTimerNotification(): Promise<void> {
   await cancelKind('timer');
 }
 
+export async function cancelTaskNudges(): Promise<void> {
+  await cancelKind('nudge');
+}
+
 export async function sendTestNotification(): Promise<boolean> {
   if (!notificationsSupported()) return false;
   if (!(await ensureNotificationPermission())) return false;

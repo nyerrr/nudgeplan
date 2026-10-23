@@ -7,30 +7,47 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { useColorScheme } from 'react-native';
+import { AppState as NativeAppState, useColorScheme } from 'react-native';
 
-import { requestCheckIn, requestSteps } from './lib/api';
+import { checkBackend, requestCheckIn, requestSteps } from './lib/api';
 import {
   applyCheckIn,
+  applyOnboarding,
   availableMinutes,
   createTask,
   dayLabel,
   fmtDuration,
   generateSteps,
+  initialState,
   movesNeeded,
   moveTasks,
   newId,
   parseBrainDump,
   planTasks,
-  seedState,
+  remainingSeconds,
+  rollover,
+  syncDaily,
+  welcomeMessage,
 } from './lib/engine';
-import { loadState, saveState } from './lib/storage';
+import {
+  cancelTaskNudges,
+  cancelTimerNotification,
+  ensureNotificationPermission,
+  notificationsSupported,
+  scheduleNextTaskNudge,
+  scheduleTimerNotification,
+  sendTestNotification,
+  snoozeTaskNudge,
+} from './lib/notifications';
+import { clearState, loadState, saveState } from './lib/storage';
 import { palettes, type Palette } from './theme';
 import type {
+  AiStatus,
   AppState,
   ChatMessage,
   Day,
   Energy,
+  OnboardingProfile,
   ParsedCheckIn,
   ParsedStep,
   ResolvedTheme,
@@ -43,17 +60,10 @@ import type {
   ToastState,
 } from './types';
 
-export const DEMO_CHIPS = [
-  "Finish the quarterly report 2h, call the dentist, reply to Sam's email, gym at 6pm",
-  "I'm tired today. Study for the chem exam 90m, laundry",
-  'Tomorrow: write the essay intro, buy groceries',
-  "I'm stuck on the budget spreadsheet",
-];
-
-const VOICE_SAMPLES = [
-  'Draft the launch post for 1h, team standup at 10am, pay the electric bill',
-  "I'm stuck on my thesis outline, also book flights",
-];
+export interface NudgeInfo {
+  at: Date;
+  title: string;
+}
 
 interface AppContextValue {
   state: AppState;
@@ -75,7 +85,8 @@ interface AppContextValue {
   setThemeMode: (theme: ThemeMode) => void;
   setName: (name: string) => void;
   setHours: (startH: number, endH: number) => boolean;
-  toggleNudges: () => void;
+  setNudgeLead: (minutes: number) => void;
+  toggleNudges: () => Promise<void>;
   toggleTask: (id: string) => void;
   saveTask: (draft: TaskDraft) => void;
   deleteTask: (id: string) => void;
@@ -92,8 +103,16 @@ interface AppContextValue {
   timerReset: (stepId: string, seconds: number) => void;
   timerSkip: () => void;
   syncTimer: (stepId: string, seconds: number) => void;
-  voiceSample: () => string;
-  demo: (id: string) => void;
+  completeOnboarding: (profile: OnboardingProfile) => Promise<void>;
+  snoozeNudge: (taskId?: string, minutes?: number) => Promise<void>;
+  checkAi: () => Promise<void>;
+  aiStatus: AiStatus;
+  aiInfo: Awaited<ReturnType<typeof checkBackend>>;
+  exportData: () => string;
+  resetApp: () => Promise<void>;
+  testNudge: () => Promise<void>;
+  storageWarning: boolean;
+  lastNudge: NudgeInfo | null;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -104,9 +123,16 @@ export function useApp(): AppContextValue {
   return value;
 }
 
+const EMPTY_TIMER: TimerState = {
+  stepId: null,
+  secs: 600,
+  running: false,
+  endsAt: null,
+};
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
-  const [state, setState] = useState<AppState>(() => seedState());
+  const [state, setState] = useState<AppState>(() => initialState());
   const [hydrated, setHydrated] = useState(false);
   const [screen, setScreen] = useState<Screen>('home');
   const [typing, setTyping] = useState(false);
@@ -114,25 +140,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [sheetTaskId, setSheetTaskId] = useState<string | null | undefined>(
     undefined,
   );
-  const [timer, setTimer] = useState<TimerState>({
-    stepId: null,
-    secs: 600,
-    running: false,
-  });
+  const [timer, setTimer] = useState<TimerState>(EMPTY_TIMER);
+  const [aiStatus, setAiStatus] = useState<AiStatus>('checking');
+  const [aiInfo, setAiInfo] = useState<Awaited<ReturnType<typeof checkBackend>>>(
+    null,
+  );
+  const [lastNudge, setLastNudge] = useState<NudgeInfo | null>(null);
+  const [storageWarning, setStorageWarning] = useState(false);
 
   const stateRef = useRef(state);
   stateRef.current = state;
+  const timerRef = useRef(timer);
+  timerRef.current = timer;
   const snapshotRef = useRef<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const voiceIndex = useRef(0);
+  const nudgeKeyRef = useRef('');
 
-  // Load persisted state once.
+  // Load persisted state once, then roll the plan into the current day.
   useEffect(() => {
     let active = true;
     loadState()
       .then((saved) => {
         if (!active) return;
-        if (saved) setState(saved);
+        if (saved) {
+          const { state: current } = rollover(saved);
+          setState(
+            syncDaily({
+              ...current,
+              chat: current.chat.length
+                ? current.chat
+                : [welcomeMessage(current.name)],
+            }),
+          );
+        }
         setHydrated(true);
       })
       .catch(() => {
@@ -143,10 +183,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Persist every meaningful change, after hydration.
+  // Persist every meaningful change after hydration, with a tiny debounce.
   useEffect(() => {
-    if (hydrated) void saveState(state);
+    if (!hydrated) return;
+    let active = true;
+    const id = setTimeout(() => {
+      void saveState(state).then((ok) => {
+        if (!active) return;
+        if (ok) setStorageWarning(false);
+        else setStorageWarning(true);
+      });
+    }, 120);
+    return () => {
+      active = false;
+      clearTimeout(id);
+    };
   }, [state, hydrated]);
+
+  // Save immediately when the app is backgrounded.
+  useEffect(() => {
+    const subscription = NativeAppState.addEventListener('change', (next) => {
+      if (next === 'background' || next === 'inactive') {
+        if (hydrated) void saveState(stateRef.current);
+      }
+      if (next === 'active') {
+        setTimer((current) => {
+          if (!current.running || current.endsAt == null) return current;
+          const secs = Math.max(
+            0,
+            Math.ceil((current.endsAt - Date.now()) / 1000),
+          );
+          return {
+            ...current,
+            secs,
+            running: secs > 0,
+            endsAt: secs > 0 ? current.endsAt : null,
+          };
+        });
+      }
+    });
+    return () => subscription.remove();
+  }, [hydrated]);
 
   const notify = useCallback((message: string, undo = false) => {
     setToast({ message, undo });
@@ -161,22 +238,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  // Timer tick.
+  const checkAi = useCallback(async () => {
+    setAiStatus('checking');
+    const health = await checkBackend();
+    setAiInfo(health);
+    setAiStatus(health ? 'online' : 'offline');
+  }, []);
+
+  useEffect(() => {
+    if (hydrated) void checkAi();
+  }, [hydrated, checkAi]);
+
+  // Accurate timer: keep counting from a deadline, not from interval ticks.
   useEffect(() => {
     if (!timer.running) return;
-    const id = setInterval(() => {
+    const tick = () => {
       setTimer((current) => {
-        if (!current.running) return current;
-        if (current.secs <= 1) {
-          return { ...current, secs: 0, running: false };
-        }
-        return { ...current, secs: current.secs - 1 };
+        if (!current.running || current.endsAt == null) return current;
+        const secs = Math.max(
+          0,
+          Math.ceil((current.endsAt - Date.now()) / 1000),
+        );
+        if (secs === current.secs) return current;
+        return {
+          ...current,
+          secs,
+          running: secs > 0,
+          endsAt: secs > 0 ? current.endsAt : null,
+        };
       });
-    }, 1000);
+    };
+    tick();
+    const id = setInterval(tick, 500);
     return () => clearInterval(id);
   }, [timer.running]);
 
-  // Announce the end of a step exactly once.
   const announcedRef = useRef(false);
   useEffect(() => {
     if (timer.secs === 0 && timer.stepId && !announcedRef.current) {
@@ -185,6 +281,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     if (timer.secs > 0) announcedRef.current = false;
   }, [timer.secs, timer.stepId, notify]);
+
+  // Schedule a real device nudge for the next timed task.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!state.nudges) {
+      setLastNudge(null);
+      nudgeKeyRef.current = '';
+      void cancelTaskNudges();
+      return;
+    }
+    const key = JSON.stringify({
+      lead: state.nudgeLeadMin,
+      tasks: state.tasks
+        .filter((task) => task.day === 'today' && !task.done && task.start != null)
+        .map((task) => [task.id, task.start, task.title]),
+    });
+    if (nudgeKeyRef.current === key) return;
+    nudgeKeyRef.current = key;
+    let active = true;
+    void scheduleNextTaskNudge(state.tasks, state.nudgeLeadMin).then((nudge) => {
+      if (!active) return;
+      setLastNudge(nudge ? { at: nudge.at, title: nudge.title } : null);
+    });
+    return () => {
+      active = false;
+    };
+  }, [
+    hydrated,
+    state.nudges,
+    state.nudgeLeadMin,
+    state.tasks,
+  ]);
 
   const mode: ResolvedTheme =
     state.theme === 'auto'
@@ -198,6 +326,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     snapshotRef.current = JSON.stringify(stateRef.current.tasks);
   }, []);
 
+  const commit = useCallback((next: AppState) => {
+    setState(syncDaily(next));
+  }, []);
+
+  const updateTimer = useCallback(
+    (next: TimerState) => {
+      timerRef.current = next;
+      setTimer(next);
+    },
+    [],
+  );
+
   const undo = useCallback(() => {
     if (!snapshotRef.current) {
       notify('Nothing to undo.');
@@ -206,12 +346,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const restored = JSON.parse(snapshotRef.current) as Task[];
     snapshotRef.current = null;
     const current = stateRef.current;
-    setState({
+    commit({
       ...current,
       tasks: planTasks(restored, current.startH, current.endH, current.energy),
     });
     notify('Undone.');
-  }, [notify]);
+  }, [commit, notify]);
 
   const go = useCallback((next: Screen) => {
     setScreen(next);
@@ -220,7 +360,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setEnergy = useCallback(
     (energy: Energy) => {
       const current = stateRef.current;
-      setState({
+      commit({
         ...current,
         energy,
         tasks: planTasks(current.tasks, current.startH, current.endH, energy),
@@ -231,7 +371,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         )}.`,
       );
     },
-    [notify],
+    [commit, notify],
   );
 
   const setView = useCallback((day: Day) => {
@@ -244,7 +384,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setName = useCallback(
     (name: string) => {
-      const clean = name.trim().slice(0, 24) || 'Alex';
+      const clean = name.trim().slice(0, 24);
+      if (!clean) {
+        notify('Add a name so greetings feel right.');
+        return;
+      }
       setState((current) => ({ ...current, name: clean }));
       notify('Name saved.');
     },
@@ -258,7 +402,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
       const current = stateRef.current;
-      setState({
+      commit({
         ...current,
         startH,
         endH,
@@ -267,12 +411,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       notify('Working hours saved.');
       return true;
     },
-    [notify],
+    [commit, notify],
   );
 
-  const toggleNudges = useCallback(() => {
-    setState((current) => ({ ...current, nudges: !current.nudges }));
+  const setNudgeLead = useCallback((minutes: number) => {
+    const clean = Math.max(0, Math.min(60, Math.round(minutes)));
+    setState((current) => ({ ...current, nudgeLeadMin: clean }));
   }, []);
+
+  const toggleNudges = useCallback(async () => {
+    const current = stateRef.current;
+    if (current.nudges) {
+      setState({ ...current, nudges: false });
+      setLastNudge(null);
+      await cancelTaskNudges();
+      notify('Nudges off.');
+      return;
+    }
+    if (!notificationsSupported()) {
+      setState({ ...current, nudges: true });
+      notify(
+        'Device notifications are not available in the browser. In-app nudges stay on Home.',
+      );
+      return;
+    }
+    const granted = await ensureNotificationPermission();
+    if (!granted) {
+      notify(
+        'Notification permission was denied. Enable it in your device settings to get nudges.',
+      );
+      return;
+    }
+    setState({ ...current, nudges: true });
+    notify('Nudges on. I will remind you before planned tasks.');
+  }, [notify]);
 
   const toggleTask = useCallback(
     (id: string) => {
@@ -280,7 +452,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const target = current.tasks.find((task) => task.id === id);
       if (!target) return;
       const done = !target.done;
-      setState({
+      commit({
         ...current,
         tasks: current.tasks.map((task) =>
           task.id === id
@@ -296,7 +468,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
       if (done) notify(`Done: ${target.title}`);
     },
-    [notify],
+    [commit, notify],
   );
 
   const closeTaskSheet = useCallback(() => setSheetTaskId(undefined), []);
@@ -341,21 +513,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ];
       }
 
-      setState({
+      commit({
         ...current,
         tasks: planTasks(tasks, current.startH, current.endH, current.energy),
       });
       setSheetTaskId(undefined);
       notify(draft.id ? 'Task updated.' : 'Task added.');
     },
-    [notify, snapshot],
+    [commit, notify, snapshot],
   );
 
   const deleteTask = useCallback(
     (id: string) => {
       snapshot();
       const current = stateRef.current;
-      setState({
+      commit({
         ...current,
         tasks: planTasks(
           current.tasks.filter((task) => task.id !== id),
@@ -367,29 +539,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setSheetTaskId(undefined);
       notify('Task deleted.', true);
     },
-    [notify, snapshot],
+    [commit, notify, snapshot],
   );
 
   const applyTaskSteps = useCallback(
     (taskId: string, steps: Step[]) => {
       const current = stateRef.current;
-      setState({
+      commit({
         ...current,
         focusId: taskId,
         tasks: current.tasks.map((task) =>
           task.id === taskId ? { ...task, steps } : task,
         ),
       });
-      setTimer({ stepId: null, secs: 600, running: false });
+      void cancelTimerNotification();
+      updateTimer(EMPTY_TIMER);
     },
-    [],
+    [commit, updateTimer],
   );
 
   const addStep = useCallback(
     (taskId: string, text: string) => {
       const clean = text.trim().slice(0, 80);
       if (!clean) return;
-      setState((current) => ({
+      const current = stateRef.current;
+      commit({
         ...current,
         tasks: current.tasks.map((task) =>
           task.id === taskId
@@ -402,9 +576,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               }
             : task,
         ),
-      }));
+      });
     },
-    [],
+    [commit],
   );
 
   const toggleStep = useCallback(
@@ -417,8 +591,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         step.id === stepId ? { ...step, done: !step.done } : step,
       );
       const allDone = steps.length > 0 && steps.every((step) => step.done);
-      setTimer({ stepId: null, secs: 600, running: false });
-      setState({
+      void cancelTimerNotification();
+      updateTimer(EMPTY_TIMER);
+      commit({
         ...current,
         tasks: current.tasks.map((item) =>
           item.id === taskId
@@ -430,7 +605,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (allDone) notify(`Finished: ${task.title}. Nice work.`);
       else notify('Step done.');
     },
-    [notify],
+    [commit, notify, updateTimer],
   );
 
   const makeSmaller = useCallback(
@@ -457,8 +632,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ];
       const steps = [...task.steps];
       steps.splice(index, 1, ...smaller);
-      setTimer({ stepId: null, secs: 600, running: false });
-      setState({
+      void cancelTimerNotification();
+      updateTimer(EMPTY_TIMER);
+      commit({
         ...current,
         tasks: current.tasks.map((item) =>
           item.id === taskId ? { ...item, steps } : item,
@@ -467,26 +643,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
       notify('Made it smaller.');
     },
-    [notify],
+    [commit, notify, updateTimer],
   );
 
-  const breakIntoSteps = useCallback(async (taskId: string) => {
-    const task = stateRef.current.tasks.find((item) => item.id === taskId);
-    if (!task) return 0;
-    const fallback = generateSteps(task.title);
-    const response = await requestSteps(task.title, task.effort);
-    const source: ParsedStep[] | null = response?.steps ?? null;
-    const steps: Step[] = source
-      ? source.map((step) => ({
-          id: step.id ?? newId('s'),
-          text: step.text,
-          min: step.min,
-          done: step.done ?? false,
-        }))
-      : fallback;
-    applyTaskSteps(taskId, steps);
-    return steps.length;
-  }, [applyTaskSteps]);
+  const breakIntoSteps = useCallback(
+    async (taskId: string) => {
+      const task = stateRef.current.tasks.find((item) => item.id === taskId);
+      if (!task) return 0;
+      const fallback = generateSteps(task.title);
+      const response = await requestSteps(task.title, task.effort);
+      const source: ParsedStep[] | null = response?.steps ?? null;
+      const steps: Step[] = source
+        ? source.map((step) => ({
+            id: step.id ?? newId('s'),
+            text: step.text,
+            min: step.min,
+            done: step.done ?? false,
+          }))
+        : fallback;
+      applyTaskSteps(taskId, steps);
+      return steps.length;
+    },
+    [applyTaskSteps],
+  );
 
   const pushHistory = useCallback(
     (current: AppState, text: string): AppState => ({
@@ -494,7 +673,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       history: [
         { id: newId('h'), when: dayLabel(0), text },
         ...current.history,
-      ].slice(0, 6),
+      ].slice(0, 20),
     }),
     [],
   );
@@ -517,18 +696,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...current,
           tasks: candidates.tasks,
         },
-        `${label} Day is now ${Math.round(
-          (candidates.tasks
-            .filter((task) => task.day === 'today')
-            .reduce((total, task) => total + task.dur, 0) /
-            availableMinutes(current.startH, current.endH, current.energy)) *
-            100,
-        )}% full.`,
+        label,
       );
-      setState(next);
+      commit(next);
       notify(label, true);
     },
-    [notify, pushHistory, snapshot],
+    [commit, notify, pushHistory, snapshot],
   );
 
   const moveSuggested = useCallback(() => {
@@ -550,7 +723,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ? { ...task, day: 'tomorrow' as Day, fixed: false, start: null }
         : task,
     );
-    setState({
+    commit({
       ...current,
       tasks: planTasks(tasks, current.startH, current.endH, current.energy),
     });
@@ -558,16 +731,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       `Moved ${ids.size} task${ids.size > 1 ? 's' : ''} to tomorrow.`,
       true,
     );
-  }, [notify, snapshot]);
+  }, [commit, notify, snapshot]);
 
-  const setFocus = useCallback((id: string) => {
-    setState((current) => ({ ...current, focusId: id }));
-    setTimer({ stepId: null, secs: 600, running: false });
-  }, []);
+  const setFocus = useCallback(
+    (id: string) => {
+      setState((current) => ({ ...current, focusId: id }));
+      void cancelTimerNotification();
+      updateTimer(EMPTY_TIMER);
+    },
+    [updateTimer],
+  );
 
   const sendCheckIn = useCallback(
     async (raw: string) => {
-      const text = raw.trim();
+      const text = raw.trim().slice(0, 4000);
       if (!text) return;
       setScreen('checkin');
       const userMessage: ChatMessage = {
@@ -602,113 +779,156 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ? latest
         : { ...latest, chat: [...latest.chat, userMessage] };
       const applied = applyCheckIn(base, parsed);
-      setState(applied.state);
+      commit(applied.state);
       setTyping(false);
     },
-    [snapshot],
+    [commit, snapshot],
   );
 
-  const timerToggle = useCallback(() => {
-    setTimer((current) => {
-      if (current.running) return { ...current, running: false };
-      if (current.secs <= 0) return current;
-      return { ...current, running: true };
-    });
-  }, []);
+  const completeOnboarding = useCallback(
+    async (profile: OnboardingProfile) => {
+      let nudges = profile.nudges;
+      if (nudges) {
+        if (!notificationsSupported()) {
+          nudges = false;
+          notify(
+            'Device notifications are not available in the browser. In-app nudges will still appear on Home.',
+          );
+        } else {
+          const granted = await ensureNotificationPermission();
+          if (!granted) {
+            nudges = false;
+            notify(
+              'Notification permission was not granted. You can enable it later in Profile.',
+            );
+          }
+        }
+      }
+      const next = applyOnboarding(stateRef.current, { ...profile, nudges });
+      commit(next);
+      setScreen('home');
+      notify(`Welcome, ${next.name.split(/\s+/)[0] || 'there'}.`);
+    },
+    [commit, notify],
+  );
 
-  const timerReset = useCallback((stepId: string, seconds: number) => {
-    setTimer({ stepId, secs: seconds, running: false });
-  }, []);
+  const snoozeNudge = useCallback(
+    async (taskId?: string, minutes = 15) => {
+      const current = stateRef.current;
+      const task =
+        current.tasks.find((item) => item.id === taskId) ??
+        current.tasks.find((item) => item.day === 'today' && !item.done);
+      if (!task) {
+        notify('Nothing to remind you about right now.');
+        return;
+      }
+      const ok = await snoozeTaskNudge(task, minutes);
+      notify(
+        ok
+          ? `Okay. I will nudge you again in ${minutes} minutes.`
+          : `Reminder kept on Home. Device notifications are unavailable.`,
+      );
+    },
+    [notify],
+  );
 
-  const timerSkip = useCallback(() => {
-    setTimer((current) => {
-      const secs = Math.max(0, current.secs - 60);
-      return { ...current, secs, running: secs === 0 ? false : current.running };
-    });
-  }, []);
+  const testNudge = useCallback(async () => {
+    const ok = await sendTestNotification();
+    notify(
+      ok
+        ? 'Test notification sent. Check your notification tray.'
+        : 'Device notifications are not available here. In-app nudges still work.',
+    );
+  }, [notify]);
 
-  const syncTimer = useCallback((stepId: string, seconds: number) => {
-    setTimer((current) =>
-      current.stepId === stepId
-        ? current
-        : { stepId, secs: seconds, running: false },
+  const exportData = useCallback(
+    () =>
+      JSON.stringify(
+        {
+          app: 'NudgePlan',
+          schema: 2,
+          exportedAt: new Date().toISOString(),
+          data: stateRef.current,
+        },
+        null,
+        2,
+      ),
+    [],
+  );
+
+  const resetApp = useCallback(async () => {
+    await cancelTaskNudges();
+    await cancelTimerNotification();
+    await clearState();
+    nudgeKeyRef.current = '';
+    setState(initialState());
+    updateTimer(EMPTY_TIMER);
+    setLastNudge(null);
+    setScreen('home');
+    setToast(null);
+    setStorageWarning(false);
+  }, [updateTimer]);
+
+  const timerTaskTitle = useCallback(() => {
+    const current = stateRef.current;
+    return (
+      current.tasks.find((task) => task.id === current.focusId)?.title ??
+      current.tasks.find((task) => task.day === 'today' && !task.done)?.title ??
+      'your focus step'
     );
   }, []);
 
-  const voiceSample = useCallback(() => {
-    const sample = VOICE_SAMPLES[voiceIndex.current % VOICE_SAMPLES.length];
-    voiceIndex.current += 1;
-    return sample;
-  }, []);
+  const timerToggle = useCallback(() => {
+    const current = timerRef.current;
+    if (current.running) {
+      const secs = remainingSeconds(current);
+      void cancelTimerNotification();
+      updateTimer({ ...current, secs, running: false, endsAt: null });
+      return;
+    }
+    if (current.secs <= 0) return;
+    void scheduleTimerNotification(current.secs, timerTaskTitle());
+    updateTimer({
+      ...current,
+      running: true,
+      endsAt: Date.now() + current.secs * 1000,
+    });
+  }, [timerTaskTitle, updateTimer]);
 
-  const demo = useCallback(
-    (id: string) => {
-      if (id === 'dump') {
-        setScreen('checkin');
-        setTimeout(() => void sendCheckIn(DEMO_CHIPS[0]), 350);
-        return;
-      }
-      if (id === 'overload') {
-        snapshot();
-        const current = stateRef.current;
-        const tasks = [
-          ...current.tasks,
-          createTask('Write grant proposal', 180, 'high', 'today', 2),
-          createTask('Client workshop prep', 120, 'high', 'today', 2),
-          createTask('Inbox zero', 45, 'low', 'today', 2),
-        ];
-        setState({
-          ...current,
-          tasks: planTasks(tasks, current.startH, current.endH, current.energy),
-        });
-        setScreen('home');
-        notify('Added 345 minutes of work.', true);
-        return;
-      }
-      if (id === 'stuck') {
-        const current = stateRef.current;
-        const task =
-          current.tasks.find(
-            (item) =>
-              item.title === 'Draft client proposal' && !item.done,
-          ) ??
-          current.tasks.find((item) => item.day === 'today' && !item.done);
-        if (!task) return;
-        const steps = task.steps.length ? task.steps : generateSteps(task.title);
-        setState({
-          ...current,
-          focusId: task.id,
-          tasks: current.tasks.map((item) =>
-            item.id === task.id ? { ...item, steps } : item,
-          ),
-        });
-        setScreen('focus');
-        return;
-      }
-      if (id === 'tired') {
-        const current = stateRef.current;
-        setState({
-          ...current,
-          energy: 'low',
-          tasks: planTasks(current.tasks, current.startH, current.endH, 'low'),
-        });
-        setScreen('home');
-        notify(
-          `Energy set to low. Open time today: ${fmtDuration(
-            availableMinutes(current.startH, current.endH, 'low'),
-          )}.`,
-        );
-        return;
-      }
-      if (id === 'reset') {
-        setState(seedState());
-        setTimer({ stepId: null, secs: 600, running: false });
-        setScreen('home');
-        setToast(null);
-        notify('Demo reset.');
-      }
+  const timerReset = useCallback(
+    (stepId: string, seconds: number) => {
+      void cancelTimerNotification();
+      updateTimer({ stepId, secs: seconds, running: false, endsAt: null });
     },
-    [notify, sendCheckIn, snapshot],
+    [updateTimer],
+  );
+
+  const timerSkip = useCallback(() => {
+    const current = timerRef.current;
+    const secs = Math.max(0, remainingSeconds(current) - 60);
+    const keepRunning = current.running && secs > 0;
+    if (current.running) {
+      if (keepRunning) {
+        void scheduleTimerNotification(secs, timerTaskTitle());
+      } else {
+        void cancelTimerNotification();
+      }
+    }
+    updateTimer({
+      ...current,
+      secs,
+      running: keepRunning,
+      endsAt: keepRunning ? Date.now() + secs * 1000 : null,
+    });
+  }, [timerTaskTitle, updateTimer]);
+
+  const syncTimer = useCallback(
+    (stepId: string, seconds: number) => {
+      if (timerRef.current.stepId === stepId) return;
+      void cancelTimerNotification();
+      updateTimer({ stepId, secs: seconds, running: false, endsAt: null });
+    },
+    [updateTimer],
   );
 
   const value = useMemo<AppContextValue>(
@@ -732,6 +952,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setThemeMode,
       setName,
       setHours,
+      setNudgeLead,
       toggleNudges,
       toggleTask,
       saveTask,
@@ -749,8 +970,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       timerReset,
       timerSkip,
       syncTimer,
-      voiceSample,
-      demo,
+      completeOnboarding,
+      snoozeNudge,
+      checkAi,
+      aiStatus,
+      aiInfo,
+      exportData,
+      resetApp,
+      testNudge,
+      storageWarning,
+      lastNudge,
     }),
     [
       state,
@@ -772,6 +1001,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setThemeMode,
       setName,
       setHours,
+      setNudgeLead,
       toggleNudges,
       toggleTask,
       saveTask,
@@ -789,8 +1019,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       timerReset,
       timerSkip,
       syncTimer,
-      voiceSample,
-      demo,
+      completeOnboarding,
+      snoozeNudge,
+      checkAi,
+      aiStatus,
+      aiInfo,
+      exportData,
+      resetApp,
+      testNudge,
+      storageWarning,
+      lastNudge,
     ],
   );
 

@@ -5,15 +5,14 @@ import { EnergyStrip } from '../components/EnergyStrip';
 import { Card, Empty, Label } from '../components/ui';
 import {
   capacityPercent,
+  completionRate,
+  dailySeries,
   fmtHour,
   peakHours,
   streakFromDays,
-  weekdayLabel,
 } from '../lib/engine';
 import { useApp } from '../state';
 import { fonts, type } from '../theme';
-
-const SAMPLE_COMPLETION = [72, 85, 64, 90, 78, 100];
 
 export function InsightsScreen() {
   const { state, colors } = useApp();
@@ -24,8 +23,13 @@ export function InsightsScreen() {
     0,
   );
   const rate = today.length ? Math.round((done / today.length) * 100) : 0;
-  const values = [...SAMPLE_COMPLETION, rate];
-  const days = [6, 5, 4, 3, 2, 1, 0].map((offset) => weekdayLabel(-offset));
+  const series = dailySeries(state, 7);
+  const values = series.map((stat) => completionRate(stat));
+  const days = series.map((stat) => {
+    const [year, month, day] = stat.date.split('-').map(Number);
+    const date = new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
+    return date.toLocaleDateString('en-US', { weekday: 'short' });
+  });
   const peaks = peakHours(state.startH, state.endH, state.energy);
   const streak = streakFromDays(state.checkins);
 
@@ -46,7 +50,7 @@ export function InsightsScreen() {
     >
       <Text style={[type.title, { color: colors.ink }]}>Insights</Text>
       <Text style={[type.sub, { color: colors.muted, marginTop: 2 }]}>
-        Six sample days plus today.
+        Your actual progress over the last 7 days.
       </Text>
 
       <View style={styles.tiles}>
