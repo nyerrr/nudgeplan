@@ -2,10 +2,12 @@
   "expo": {
     "name": "NudgePlan",
     "slug": "nudgeplan",
+    "scheme": "nudgeplan",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0D12",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nudgeplan.app"
@@ -18,26 +20,18 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "RECORD_AUDIO",
-        "POST_NOTIFICATIONS"
-      ]
+      "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single"
     },
     "plugins": [
-      "expo-font",
-      "expo-speech-recognition",
-      "expo-sharing",
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/icon.png",
-          "color": "#000A73"
-        }
-      ]
-    ]
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
   }
 }

@@ -1,44 +1,5 @@
 # NudgePlan Frontend (React Native + Expo + TypeScript)
 
-The mobile app is Android-first but runs in the browser for fast iteration. It
-works offline by default: planning, scheduling, Reality Check, and micro-step
-generation all run locally in `src/lib/engine.ts`.
-
-## Run the frontend and backend
-
-Use two separate PowerShell terminals from the repository root.
-
-### Terminal 1: Backend
-
-```powershell
-cd C:\Users\Dave\nudgeplan\backend
-
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-copy .env.example .env
-python run.py
-```
-
-The backend runs at http://localhost:8001. Verify it is running with:
-
-```powershell
-Invoke-RestMethod http://localhost:8001/health
-```
-
-The default `.env` uses offline mode, so a Gemini API key is not required.
-
-### Terminal 2: Frontend
-
-```powershell
-cd C:\Users\Dave\nudgeplan\frontend
-npm install
-npx expo start --web
-```
-
-Open http://localhost:8081 in a browser. The frontend uses
-`http://localhost:8001` for the backend by default.
-
 ## Setup
 
 ```powershell
@@ -65,7 +26,7 @@ npx expo start
 ```
 
 Press `a`. The emulator reaches the backend at `http://10.0.2.2:8001`
-(this default is set in `src/lib/api.ts`).
+(this default is set in `src/api/plan.ts`).
 
 ### Option C: Physical Android phone (requires Expo Go)
 
@@ -119,101 +80,76 @@ head. `Plan` holds everything else. `You` holds defaults.
 
 ```
 src/
-  theme.ts                Design tokens: colours, spacing, radii, type scale
-  types.ts                Shared types
-  state.tsx               Central provider: state, persistence, actions, demos
-  lib/
-    engine.ts             Parsing, energy curve, scheduling, Reality Check, steps
-    api.ts                Backend calls with timeout and null fallback
-    storage.ts            AsyncStorage load/save
-    notifications.ts      Notification helpers
-    useVoiceInput.ts      Voice input hook
+  theme.ts              Design tokens: colours, spacing, radii, type scale
+  api/plan.ts           Backend client + response validation (the Micro-Step Guard)
   components/
-    ui.tsx                Primitives
-    TabBar.tsx            Bottom navigation
-    TaskRow.tsx           Task display
-    TaskSheet.tsx         Task create/edit
-    EnergyStrip.tsx       Energy visualization
-    Icon.tsx              Icon wrapper
-    Toast.tsx             Toast notifications
-  screens/                Home, Plan, Check-in, Focus, Insights, Profile, About, etc.
+    ui.tsx              Primitives: Button, Card, Chip, Checkbox, StatTile...
+    task.tsx            TaskCard, PendingTaskCard, EnergySelector, StepEditor
+  data/dumpPrompts.ts   Example brain-dump prompts shown as tap targets
+  lib/realityCheck.ts   Reality Check Engine (capacity vs. workload rules)
+  lib/time.ts           Minute/date formatting and greeting helpers
+  lib/a11y.ts           Platform-aware accessibility state helper
+  store/PlanContext.tsx App state (tasks, pending tasks, check-in)
 ```
 
 ## Data flow
 
-The app can run fully offline - parsing, scheduling, Reality Check, and
-micro-step generation all run locally in `src/lib/engine.ts`. When the backend
-is available, `src/lib/api.ts` calls it; otherwise it falls back to the local
-engine.
+There is no seed data. The app starts empty and only fills up from a real
+request to the backend:
+
+```
+POST /ai/plan { text }
+  -> { tasks: [{ title, minutes, energy, priority, due, steps }],
+       breakdown, model }
+  -> src/api/plan.ts  normalises every field again (never trusts the network)
+  -> store.pending    editable on the Confirm screen
+  -> store.tasks      committed to the plan
+```
+
+`src/api/plan.ts` and `backend/main.py` apply the same guard: missing fields
+get defaults, minutes are clamped to 5-480 and rounded to 5, unknown energy or
+priority falls back to `medium`, and a task with no steps gets a synthetic
+first step. A malformed model response produces zero tasks instead of invented
+ones, and the Dump screen asks the user to rephrase.
 
 ## Design system
 
-- Light and dark palettes from `src/theme.ts`
-- Poppins fonts, Ionicons, LinearGradient, and safe-area insets
-- Energy is colour coded: low/medium/high
+- One dark theme, tuned for low light. Surfaces are low-chroma so task
+  content is the only saturated thing on screen.
+- Energy is colour coded: red (low), amber (medium), green (high).
+- Minimum touch target is 44pt. Tap targets have generous hit slop.
+- All interactive controls carry ARIA state. `src/lib/a11y.ts` exists because
+  react-native-web ignores React Native's `accessibilityState` prop and only
+  reads flat `aria-*` attributes - spreading `a11yState()` gives each
+  platform the shape it understands.
 
 ## Current features
 
-### Navigation
+- Brain dump text input, calling the live `POST /ai/plan` backend
+- Structured task extraction (time, energy, priority, due date, micro-steps)
+  produced by Gemini, with a validated fallback when the model misbehaves
+- Extracted task confirmation with per-task editing
+- Reality Check: available hours + energy level, workload vs capacity,
+  suggested changes computed from the actual tasks when the plan does not fit.
+  The engine ranks by priority first, so the lowest-priority task is offered up
+  before anything else; tasks due today **and** high priority are pinned and
+  never suggested (the UI says the day is a hard limit instead). Applying a
+  suggestion sets the task's due date to tomorrow, and "Move all N to tomorrow"
+  applies the whole set in one tap.
+- Daily plan with micro-steps, completion checkboxes, and progress
+- Today and Reality Check share one yardstick: energy-adjusted capacity
+  (`availableHours x ENERGY_FACTOR`), so the two screens never disagree
+- Plan tab with multi-select delete: pick the tasks the planner got wrong (or
+  select all shown) and remove them behind a two-step confirm
+- Task detail with editable micro-steps, rescheduling, and deletion
+- Task list with All / Today / Later / Done filters
+- Preferences for typical hours, usual energy, and notification defaults
+- Live backend status (model name, online/offline) on the You screen
 
-- Home, Plan, Focus, and Insights tabs, plus a central Check-in button
-- Profile and About screens reachable from Home and Profile
-- Custom state-based tab navigator
+## Known limits
 
-### Home
-
-- Time-aware greeting and quick brain-dump bar
-- Reality Check card: planned vs. open time, capacity %, move/keep actions
-- Low/Medium/High energy selector that re-runs the schedule
-- Up-next task list with inline completion
-- Nudges
-
-### Plan
-
-- Today/Tomorrow toggle
-- Capacity meter and energy-by-hour visualization
-- Timeline of scheduled tasks and a "Needs room" section
-- Task sheet for create/edit/delete
-
-### Check-in
-
-- Conversational chat with typing indicator
-- Demo chips for common brain dumps
-- Calls `POST /plan/checkin`; falls back to local parsing if the backend is down
-- Parsed task cards, capacity warning, and CTAs
-
-### Focus (Micro-Step Guard)
-
-- Task picker for open tasks
-- Breaks a task into steps of 10 minutes or less
-- Countdown timer with Start/Pause, Reset
-- Step checklist and "Make it smaller"
-
-### Insights
-
-- Completion by day, capacity today, micro-steps finished, check-in streak
-- Energy-by-hour chart and recent Reality Check history
-
-### Profile
-
-- Name, working hours, nudges toggle, Auto/Light/Dark theme
-- About screen
-- Prototype demos: brain dump, overload, get unstuck, low energy, reset
-
-### Persistence and theme
-
-- AsyncStorage persists tasks, chat, history, settings, theme, and step progress
-- Light and dark themes
-
-## Testing and checks
-
-```powershell
-npx tsc --noEmit
-npx expo export --platform web
-```
-
-With the backend running (`python run.py` in `backend/`), try the check-in flow,
-Reality Check, Focus mode, and verify persistence after reload.
-
-If the backend is not running, the app still works; check-ins and breakdowns
-use the local engine.
+- State is in memory. Reloading the page clears the plan (Supabase lands in
+  Phase 3).
+- Notification toggles are UI only; no push scheduling yet.
+- `GEMINI_MOCK=true` on the backend swaps Gemini for a local heuristic planner
+  so the app is still usable with no API key.
