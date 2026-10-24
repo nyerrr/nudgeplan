@@ -62,7 +62,13 @@ app state. See `frontend/README.md` for the map.
 You can develop and test everything in a web browser. The code stays
 Android-first, so nothing needs to change when you get a device.
 
-### 1. Backend
+Run the backend and the frontend in **two separate PowerShell terminals** from
+the repository root. First-time setup only needs to be done once; after that,
+`python run.py` and `npx expo start --web` are the only two commands you need.
+
+### 1. Backend (Terminal 1)
+
+First-time setup:
 
 ```powershell
 cd backend
@@ -72,21 +78,36 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
+Start the server:
+
+```powershell
+cd backend
+python run.py
+```
+
+- API: http://localhost:8001
+- Health check: http://localhost:8001/health
+- Interactive docs: http://localhost:8001/docs
+
+Use `python run.py --reload` for auto-reload during development.
+
 `backend/.env.example` ships with `GEMINI_MOCK=true`, so it works with **no API key**.
 To use real AI later, get a free key at https://aistudio.google.com/apikey,
 paste it into `GEMINI_API_KEY`, and set `GEMINI_MOCK=false`.
 
-```powershell
-python run.py
-```
+### 2. Frontend (Terminal 2)
 
-Backend runs on http://localhost:8001
-
-### 2. Frontend
+First-time setup (skip if `frontend/node_modules` already exists):
 
 ```powershell
 cd frontend
 npm install
+```
+
+Start the dev server:
+
+```powershell
+cd frontend
 npx expo start --web
 ```
 
@@ -96,7 +117,18 @@ prototype demos.
 Navigation on web: `Today` / `Dump` / `Plan` / `You` along the bottom, plus
 the `Confirm`, `Reality Check`, and task detail screens that open on top.
 
-### 3. Test the API directly
+### 3. Pick your target
+
+| Target | Command | Backend URL |
+| ------ | ------- | ----------- |
+| Web browser | `npx expo start --web` | `http://localhost:8001` |
+| Android emulator | `npx expo start`, then press `a` | `http://10.0.2.2:8001` |
+| Physical Android phone | set `EXPO_PUBLIC_API_URL=http://<your-pc-lan-ip>:8001` in `frontend/.env`, then `npx expo start` | your PC's LAN IP |
+
+The web and emulator defaults live in `frontend/src/api/plan.ts` and
+`frontend/src/lib/api.ts`; `EXPO_PUBLIC_API_URL` overrides both.
+
+### 4. Test the API directly
 
 ```powershell
 cd backend
