@@ -4,6 +4,41 @@ The mobile app is Android-first but runs in the browser for fast iteration. It
 works offline by default: planning, scheduling, Reality Check, and micro-step
 generation all run locally in `src/lib/engine.ts`.
 
+## Run the frontend and backend
+
+Use two separate PowerShell terminals from the repository root.
+
+### Terminal 1: Backend
+
+```powershell
+cd C:\Users\Dave\nudgeplan\backend
+
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env
+python run.py
+```
+
+The backend runs at http://localhost:8001. Verify it is running with:
+
+```powershell
+Invoke-RestMethod http://localhost:8001/health
+```
+
+The default `.env` uses offline mode, so a Gemini API key is not required.
+
+### Terminal 2: Frontend
+
+```powershell
+cd C:\Users\Dave\nudgeplan\frontend
+npm install
+npx expo start --web
+```
+
+Open http://localhost:8081 in a browser. The frontend uses
+`http://localhost:8001` for the backend by default.
+
 ## Setup
 
 ```powershell
