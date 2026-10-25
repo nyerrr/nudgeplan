@@ -18,12 +18,21 @@ GEMINI_MODEL=gemini-3.6-flash
 GEMINI_MODEL_FALLBACKS=gemini-3.5-flash-lite,gemini-3.8-flash
 GEMINI_MOCK=false
 PORT=8001
+CORS_ORIGINS=http://localhost:8081,http://localhost:19006
+API_AUTH_TOKEN=
+HOST=127.0.0.1
 ```
 
 | `GEMINI_MOCK` | Behaviour                                             |
 | ------------- | ----------------------------------------------------- |
 | `true`       | Offline planner. No API key, no network, no cost.     |
 | `false`      | Real Gemini calls. Needs a valid `GEMINI_API_KEY`.    |
+
+The backend binds to loopback by default. If `HOST` is changed to a LAN or
+public interface, `API_AUTH_TOKEN` is required and clients must send it as the
+`X-API-Key` header. Put the API behind a TLS reverse proxy before allowing
+non-local traffic. `CORS_ORIGINS` should contain only the exact browser origins
+that need access; do not use `*`.
 
 Get a free key at https://aistudio.google.com/apikey, paste it into
 `GEMINI_API_KEY`, and set `GEMINI_MOCK=false`.
@@ -59,6 +68,10 @@ python run.py --reload
 - API root: http://localhost:8001
 - Health check: http://localhost:8001/health
 - Interactive docs: http://localhost:8001/docs
+
+The frontend may use HTTP only for loopback development. Remote or physical
+device deployments must set `EXPO_PUBLIC_API_URL` to an HTTPS endpoint and
+`EXPO_PUBLIC_API_KEY` to the same value as `API_AUTH_TOKEN`.
 
 ### Why port 8001 and not 8000
 

@@ -19,10 +19,22 @@ load_dotenv()
 
 PORT = int(os.getenv("PORT", "8001"))
 HOST = os.getenv("HOST", "127.0.0.1")
+API_AUTH_TOKEN = os.getenv("API_AUTH_TOKEN", "").strip()
+
+
+def _is_loopback(host: str) -> bool:
+    return host in {"127.0.0.1", "::1", "localhost"}
 
 
 def main() -> int:
     reload_flag = "--reload" in sys.argv
+
+    if not _is_loopback(HOST) and not API_AUTH_TOKEN:
+        print(
+            "[ERROR] HOST is not loopback, but API_AUTH_TOKEN is not configured. "
+            "Set a strong token before exposing the API."
+        )
+        return 1
 
     print(f"[INFO] NudgePlan API on http://{HOST}:{PORT}")
     print("[INFO] Docs at http://{0}:{1}/docs".format(HOST, PORT))
