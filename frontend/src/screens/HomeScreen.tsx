@@ -83,7 +83,10 @@ export function HomeScreen() {
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
           <Text style={[type.title, styles.greeting, { color: colors.ink }]}>
-            {greeting()}, {state.name}
+            {greeting()}
+          </Text>
+          <Text style={[type.title, styles.greetingName, { color: colors.ink }]}>
+            {state.name}
           </Text>
           <Text style={[type.sub, { color: colors.muted, marginTop: 2 }]}>
             Let&apos;s shape your day.
@@ -474,6 +477,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   greeting: {
+    maxWidth: 205,
+    lineHeight: 28,
+  },
+  greetingName: {
     maxWidth: 205,
     lineHeight: 28,
   },
