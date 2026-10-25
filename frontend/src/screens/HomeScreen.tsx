@@ -477,8 +477,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   greeting: {
-    maxWidth: 205,
-    lineHeight: 28,
+    maxWidth: 170,
+    fontSize: 20,
+    lineHeight: 25,
+    letterSpacing: -0.2,
   },
   greetingName: {
     maxWidth: 205,
