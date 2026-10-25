@@ -81,7 +81,7 @@ export function HomeScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.head}>
-        <View style={{ flex: 1 }}>
+        <View style={styles.headCopy}>
           <Text style={[type.title, styles.greeting, { color: colors.ink }]}>
             {greeting()}
           </Text>
@@ -473,27 +473,31 @@ const styles = StyleSheet.create({
   head: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: 8,
     marginBottom: 16,
   },
+  headCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
   greeting: {
-    maxWidth: 170,
     fontSize: 20,
     lineHeight: 25,
     letterSpacing: -0.2,
   },
   greetingName: {
-    maxWidth: 205,
-    lineHeight: 28,
+    lineHeight: 25,
   },
   headActions: {
     alignItems: 'flex-end',
     gap: 8,
+    flexShrink: 0,
   },
   headControls: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 0,
   },
   avatar: {
     width: 42,
