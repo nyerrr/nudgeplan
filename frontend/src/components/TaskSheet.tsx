@@ -53,6 +53,7 @@ export function TaskSheet() {
   const [startText, setStartText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   useEffect(() => {
     if (sheetTaskId === undefined) return;
@@ -66,6 +67,7 @@ export function TaskSheet() {
     );
     setError(null);
     setWorking(false);
+    setConfirmingDelete(false);
     // Reset only when the sheet opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetTaskId]);
@@ -100,6 +102,11 @@ export function TaskSheet() {
     closeTaskSheet();
     go('focus');
     notify(`Split into ${count} small steps.`);
+  };
+
+  const confirmDelete = () => {
+    if (!task) return;
+    setConfirmingDelete(true);
   };
 
   const autoSlot =
@@ -294,11 +301,39 @@ export function TaskSheet() {
               ) : null}
 
               <View style={styles.actions}>
+                {confirmingDelete && task ? (
+                  <View
+                    accessibilityRole="alert"
+                    style={[
+                      styles.deleteConfirm,
+                      { backgroundColor: colors.surface, borderColor: colors.line },
+                    ]}
+                  >
+                    <Text style={[styles.deleteConfirmTitle, { color: colors.ink }]}>
+                      Delete &quot;{task.title}&quot;?
+                    </Text>
+                    <View style={styles.deleteConfirmActions}>
+                      <Button
+                        small
+                        ghost
+                        label="Cancel"
+                        onPress={() => setConfirmingDelete(false)}
+                      />
+                      <Button
+                        small
+                        label="Delete"
+                        background={colors.warn}
+                        foreground={colors.onWarn}
+                        onPress={() => deleteTask(task.id)}
+                      />
+                    </View>
+                  </View>
+                ) : null}
                 {task ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Delete task"
-                    onPress={() => deleteTask(task.id)}
+                    onPress={confirmDelete}
                     style={[
                       styles.deleteButton,
                       { borderColor: colors.warn },
@@ -390,6 +425,22 @@ const styles = StyleSheet.create({
     gap: 8,
     flexWrap: 'wrap',
     marginTop: 20,
+  },
+  deleteConfirm: {
+    width: '100%',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 10,
+  },
+  deleteConfirmTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 13,
+  },
+  deleteConfirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 8,
   },
   deleteButton: {
     width: 40,

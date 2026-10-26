@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,9 +13,9 @@ import { TaskRow } from '../components/TaskRow';
 import {
   Button,
   Card,
-  Empty,
   Label,
   Meter,
+  Segmented,
 } from '../components/ui';
 import {
   fmtDuration,
@@ -44,9 +43,6 @@ export function HomeScreen() {
     openTaskSheet,
   } = useApp();
   const [text, setText] = useState('');
-  const [showEnergy, setShowEnergy] = useState(false);
-  const energyColor = (energy: Energy) =>
-    energy === 'low' ? colors.low : energy === 'high' ? colors.high : colors.accent;
   const { listening, start, supported } = useVoiceInput({
     onTranscript: (value) => {
       setText((current) => (current.trim() ? `${current} ${value}` : value));
@@ -82,6 +78,15 @@ export function HomeScreen() {
     >
       <View style={styles.head}>
         <View style={styles.headCopy}>
+          <Text style={[styles.date, { color: colors.muted }]}>
+            {new Date()
+              .toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+              })
+              .toUpperCase()}
+          </Text>
           <Text style={[type.title, styles.greeting, { color: colors.ink }]}>
             {greeting()}
           </Text>
@@ -93,37 +98,7 @@ export function HomeScreen() {
           </Text>
         </View>
         <View style={styles.headActions}>
-          <View style={styles.headControls}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: showEnergy }}
-              accessibilityLabel={`Energy is ${state.energy}. Adjust energy`}
-              onPress={() => setShowEnergy((value) => !value)}
-              style={[
-                styles.energyBadge,
-                { backgroundColor: colors.surface, borderColor: colors.line },
-              ]}
-            >
-              <View
-                style={[
-                  styles.energyDot,
-                  { backgroundColor: energyColor(state.energy) },
-                ]}
-              />
-              <Text style={[styles.energyBadgeText, { color: colors.ink }]}>
-                {state.energy === 'low'
-                  ? 'Low energy'
-                  : state.energy === 'high'
-                    ? 'High energy'
-                    : 'Steady'}
-              </Text>
-              <Icon
-                name={showEnergy ? 'chevron-up' : 'chevron-down'}
-                size={13}
-                color={colors.brand}
-              />
-            </Pressable>
-            <Pressable
+          <Pressable
             accessibilityRole="button"
             accessibilityLabel="Profile and settings"
             onPress={() => go('profile')}
@@ -142,69 +117,8 @@ export function HomeScreen() {
               {state.name.charAt(0).toUpperCase()}
             </Text>
           </Pressable>
-          </View>
         </View>
       </View>
-
-      <Modal
-        visible={showEnergy}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowEnergy(false)}
-      >
-        <View style={styles.energyOverlay}>
-          <Pressable
-            accessibilityLabel="Close energy menu"
-            style={StyleSheet.absoluteFill}
-            onPress={() => setShowEnergy(false)}
-          />
-          <View
-            style={[
-              styles.energyMenu,
-              { backgroundColor: colors.surface, borderColor: colors.line },
-            ]}
-          >
-            {(['low', 'medium', 'high'] as Energy[]).map((energy) => {
-              const active = state.energy === energy;
-              const label =
-                energy === 'low' ? 'Low' : energy === 'high' ? 'High' : 'Medium';
-              return (
-                <Pressable
-                  key={energy}
-                  accessibilityRole="menuitem"
-                  accessibilityState={{ selected: active }}
-                  onPress={() => {
-                    setEnergy(energy);
-                    setShowEnergy(false);
-                  }}
-                  style={[
-                    styles.energyOption,
-                    active ? { backgroundColor: colors.surface2 } : null,
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.energyOptionDot,
-                      { backgroundColor: energyColor(energy) },
-                    ]}
-                  />
-                  <Text
-                    style={{
-                      color: colors.ink,
-                      fontFamily: active ? fonts.bold : fonts.medium,
-                      fontSize: 13,
-                      flex: 1,
-                    }}
-                  >
-                    {label}
-                  </Text>
-                  {active ? <Icon name="checkmark" size={16} color={colors.brand} /> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      </Modal>
 
       <View
         style={[
@@ -255,11 +169,31 @@ export function HomeScreen() {
         </Pressable>
       </View>
 
+      <View style={styles.energySection}>
+        <View style={styles.sectionHeading}>
+          <Text style={[styles.sectionTitle, { color: colors.ink }]}>
+            How&apos;s your energy?
+          </Text>
+          <Text style={[styles.sectionHint, { color: colors.muted }]}>
+            Plan around it
+          </Text>
+        </View>
+        <Segmented
+          options={[
+            { value: 'low' as Energy, label: 'Low' },
+            { value: 'medium' as Energy, label: 'Steady' },
+            { value: 'high' as Energy, label: 'High' },
+          ]}
+          value={state.energy}
+          onChange={setEnergy}
+        />
+      </View>
+
       <View
         style={[
           styles.reality,
           {
-            backgroundColor: reality.over ? '#FEE2E2' : colors.surface2,
+            backgroundColor: reality.over ? '#FEE2E2' : colors.accent,
             borderLeftColor: reality.over ? colors.warn : colors.brand,
           },
         ]}
@@ -267,7 +201,7 @@ export function HomeScreen() {
         <Text
           style={[
             styles.realityK,
-            { color: reality.over ? '#7F1D1D' : colors.ink },
+            { color: reality.over ? '#7F1D1D' : colors.onAccent },
           ]}
         >
           REALITY CHECK
@@ -275,7 +209,7 @@ export function HomeScreen() {
         <Text
           style={[
             styles.realityT,
-            { color: reality.over ? '#7F1D1D' : colors.ink },
+            { color: reality.over ? '#7F1D1D' : colors.onAccent },
           ]}
         >
           {reality.over
@@ -287,13 +221,13 @@ export function HomeScreen() {
         <Meter
           percent={reality.percent}
           color={reality.over ? colors.warn : colors.accent}
-          track={colors.line}
+          track={reality.over ? colors.line : colors.surface}
         />
         <Text
           style={[
             type.hint,
             {
-              color: reality.over ? '#7F1D1D' : colors.muted,
+              color: reality.over ? '#7F1D1D' : colors.onAccent,
               marginTop: 6,
               fontFamily: fonts.regular,
             },
@@ -314,7 +248,7 @@ export function HomeScreen() {
         >
           <Text
             style={{
-              color: reality.over ? '#7F1D1D' : colors.brand,
+              color: reality.over ? '#7F1D1D' : colors.onAccent,
               fontFamily: fonts.semibold,
               fontSize: 12.5,
             }}
@@ -324,7 +258,7 @@ export function HomeScreen() {
           <Icon
             name="chevron-forward"
             size={14}
-            color={reality.over ? '#7F1D1D' : colors.brand}
+            color={reality.over ? '#7F1D1D' : colors.onAccent}
           />
         </Pressable>
         {reality.tight ? (
@@ -424,10 +358,23 @@ export function HomeScreen() {
 
       {state.nudges ? (
         <>
-          <Label>Nudge</Label>
-          <Card>
+          <Label>A gentle nudge</Label>
+          <Card style={styles.nudgeCard}>
             {next ? (
               <>
+                <View style={styles.nudgeHeader}>
+                  <View style={[styles.nudgeIcon, { backgroundColor: colors.surface2 }]}>
+                    <Icon name="sunny-outline" size={19} color={colors.brand} />
+                  </View>
+                  <View style={styles.nudgeCopy}>
+                    <Text style={[styles.nudgeTitle, { color: colors.ink }]}>
+                      Your focus window is opening.
+                    </Text>
+                    <Text style={[styles.nudgeBody, { color: colors.muted }]}>
+                      Start with one small step?
+                    </Text>
+                  </View>
+                </View>
                 <Text style={[type.body, { color: colors.ink }]}>
                   <Text style={{ fontFamily: fonts.bold }}>{next.title}</Text> is
                   next{next.start != null ? ` at ${fmtTime(next.start)}` : ''}.
@@ -480,6 +427,12 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  date: {
+    fontFamily: fonts.bold,
+    fontSize: 10,
+    letterSpacing: 1.1,
+    marginBottom: 4,
+  },
   greeting: {
     fontSize: 20,
     lineHeight: 25,
@@ -493,32 +446,12 @@ const styles = StyleSheet.create({
     gap: 8,
     flexShrink: 0,
   },
-  headControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexShrink: 0,
-  },
   avatar: {
     width: 42,
     height: 42,
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  energyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-  },
-  energyDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
   },
   askbar: {
     flexDirection: 'row',
@@ -544,7 +477,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  energyBadgeText: {
+  energySection: {
+    marginTop: 18,
+  },
+  sectionHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 9,
+  },
+  sectionTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    lineHeight: 21,
+  },
+  sectionHint: {
     fontFamily: fonts.medium,
     fontSize: 11,
   },
@@ -609,37 +556,35 @@ const styles = StyleSheet.create({
     gap: 10,
     flexWrap: 'wrap',
   },
-  energyOverlay: {
-    flex: 1,
-    alignItems: 'flex-end',
-    paddingTop: 72,
-    paddingRight: 18,
-    backgroundColor: 'rgba(15, 23, 42, 0.08)',
+  nudgeCard: {
+    padding: 14,
   },
-  energyMenu: {
-    width: 150,
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  energyOption: {
-    minHeight: 34,
+  nudgeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    borderRadius: 9,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    gap: 10,
+    marginBottom: 10,
   },
-  energyOptionDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+  nudgeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nudgeCopy: {
+    flex: 1,
+  },
+  nudgeTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  nudgeBody: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 1,
   },
   recommended: {
     marginTop: 14,

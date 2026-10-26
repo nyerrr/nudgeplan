@@ -34,12 +34,17 @@ export function FocusScreen() {
     makeSmaller,
     addStep,
     breakIntoSteps,
+    deleteTask,
     notify,
     go,
   } = useApp();
   const [stepText, setStepText] = useState('');
   const [breaking, setBreaking] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [deleteCandidate, setDeleteCandidate] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const [showSteps, setShowSteps] = useState(false);
 
   const candidates = sortedTasks(state.tasks, 'today').filter(
@@ -79,6 +84,10 @@ export function FocusScreen() {
     if (!selected || !stepText.trim()) return;
     addStep(selected.id, stepText);
     setStepText('');
+  };
+
+  const confirmDelete = (taskId: string, title: string) => {
+    setDeleteCandidate({ id: taskId, title });
   };
 
   return (
@@ -239,10 +248,56 @@ export function FocusScreen() {
                           size={18}
                           color={active ? colors.onAccent : colors.brand}
                         />
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Delete ${task.title}`}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            confirmDelete(task.id, task.title);
+                          }}
+                          hitSlop={8}
+                        >
+                          <Icon name="trash-outline" size={17} color={colors.warn} />
+                        </Pressable>
                       </Pressable>
                     );
                   })}
                 </View>
+                {deleteCandidate ? (
+                  <View
+                    accessibilityRole="alert"
+                    style={[
+                      styles.deleteConfirm,
+                      { backgroundColor: colors.surface, borderColor: colors.line },
+                    ]}
+                  >
+                    <Text style={[styles.deleteConfirmTitle, { color: colors.ink }]}>
+                      Delete this task?
+                    </Text>
+                    <Text style={[styles.deleteConfirmBody, { color: colors.muted }]}>
+                      &quot;{deleteCandidate.title}&quot; will be removed from your plan.
+                    </Text>
+                    <View style={styles.deleteConfirmActions}>
+                      <Button
+                        small
+                        ghost
+                        label="Cancel"
+                        onPress={() => setDeleteCandidate(null)}
+                      />
+                      <Button
+                        small
+                        label="Delete"
+                        background={colors.warn}
+                        foreground={colors.onWarn}
+                        onPress={() => {
+                          deleteTask(deleteCandidate.id);
+                          setDeleteCandidate(null);
+                          setPickerOpen(false);
+                        }}
+                      />
+                    </View>
+                  </View>
+                ) : null}
               </View>
             </View>
           </Modal>
@@ -571,6 +626,28 @@ const styles = StyleSheet.create({
   },
   pickerOptions: {
     gap: 8,
+  },
+  deleteConfirm: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 12,
+  },
+  deleteConfirmTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+  },
+  deleteConfirmBody: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+  deleteConfirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 10,
   },
   stepsToggle: {
     flexDirection: 'row',

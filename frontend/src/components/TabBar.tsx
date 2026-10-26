@@ -62,25 +62,36 @@ export function TabBar() {
     >
       {renderTab(TABS[0])}
       {renderTab(TABS[1])}
-      <Pressable
-        accessibilityRole="tab"
-        accessibilityLabel="Capture"
-        accessibilityState={{ selected: screen === 'checkin' }}
-        aria-selected={screen === 'checkin'}
-        onPress={() => go('checkin')}
-        style={({ pressed }) => [
-          styles.add,
-          {
-            backgroundColor: colors.brand,
-            opacity: pressed ? 0.85 : 1,
-            ...(screen === 'checkin'
-              ? { borderWidth: 3, borderColor: colors.bg }
-              : null),
-          },
-        ]}
-      >
-        <Icon name="create-outline" size={24} color={colors.onBrand} />
-      </Pressable>
+      <View style={styles.centerTab}>
+        <Pressable
+          accessibilityRole="tab"
+          accessibilityLabel="Check-in"
+          accessibilityState={{ selected: screen === 'checkin' }}
+          aria-selected={screen === 'checkin'}
+          onPress={() => go('checkin')}
+          style={({ pressed }) => [
+            styles.add,
+            {
+              backgroundColor: colors.brand,
+              borderColor: colors.surface,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Icon name="sparkles-outline" size={22} color={colors.onBrand} />
+        </Pressable>
+        <Text
+          style={[
+            styles.tabLabel,
+            {
+              color: screen === 'checkin' ? colors.brand : colors.muted,
+              fontFamily: screen === 'checkin' ? fonts.bold : fonts.medium,
+            },
+          ]}
+        >
+          Check-in
+        </Text>
+      </View>
       {renderTab(TABS[2])}
       {renderTab(TABS[3])}
     </View>
@@ -102,18 +113,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
-    paddingVertical: 6,
+    paddingVertical: 5,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10,
   },
   add: {
     width: 52,
     height: 52,
     borderRadius: 26,
+    borderWidth: 3,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 2,
+    marginBottom: 4,
     flexShrink: 0,
+  },
+  centerTab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 2,
   },
 });

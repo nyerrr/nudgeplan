@@ -108,6 +108,7 @@ export function TaskRow({
             ) : null}
           </View>
         </View>
+        <Icon name="chevron-forward" size={17} color={colors.muted} />
       </Pressable>
     </View>
   );
