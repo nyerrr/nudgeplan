@@ -1,372 +1,393 @@
-import { ReactNode } from 'react';
+import React from 'react';
+import type { ReactNode } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
-  PressableProps,
-  StyleProp,
   StyleSheet,
   Text,
-  TextStyle,
   View,
-  ViewStyle,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
 } from 'react-native';
-import { colors, radius, spacing, type } from '../theme';
-import { a11yState } from '../lib/a11y';
 
-/* ------------------------------------------------------------------ Button */
+import { useApp } from '../state';
+import { effortLabel, fonts, type } from '../theme';
+import type { Effort } from '../types';
+import { Icon, type IoniconName } from './Icon';
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
-
-type ButtonProps = PressableProps & {
-  label: string;
-  variant?: ButtonVariant;
-  loading?: boolean;
-  fullWidth?: boolean;
-  size?: 'md' | 'lg';
-  style?: StyleProp<ViewStyle>;
-};
-
-export function Button({
-  label,
-  variant = 'primary',
-  loading,
-  fullWidth,
-  size = 'md',
-  disabled,
+export function Label({
+  children,
   style,
-  ...rest
-}: ButtonProps) {
-  const isDisabled = disabled || loading;
+}: {
+  children: ReactNode;
+  style?: StyleProp<TextStyle>;
+}) {
+  const { colors } = useApp();
   return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={isDisabled}
-      {...a11yState({ disabled: !!isDisabled, busy: !!loading })}
-      style={({ pressed }) => [
-        styles.btn,
-        size === 'lg' && styles.btnLg,
-        variantStyles[variant].container,
-        pressed && !isDisabled && variantStyles[variant].pressed,
-        isDisabled && styles.btnDisabled,
-        fullWidth && styles.btnFull,
-        style,
-      ]}
-      {...rest}
-    >
-      {loading ? (
-        <ActivityIndicator
-          size="small"
-          color={variant === 'primary' || variant === 'danger' ? colors.white : colors.accent}
-        />
-      ) : (
-        <Text style={[styles.btnLabel, variantStyles[variant].label, size === 'lg' && styles.btnLabelLg]}>
-          {label}
-        </Text>
-      )}
-    </Pressable>
+    <Text style={[styles.label, type.label, { color: colors.muted }, style]}>
+      {children}
+    </Text>
   );
 }
-
-const variantStyles: Record<
-  ButtonVariant,
-  { container: ViewStyle; pressed: ViewStyle; label: TextStyle }
-> = {
-  primary: {
-    container: { backgroundColor: colors.accent },
-    pressed: { backgroundColor: colors.accentPressed },
-    label: { color: colors.white },
-  },
-  secondary: {
-    container: { backgroundColor: colors.surfaceRaised, borderWidth: 1, borderColor: colors.border },
-    pressed: { backgroundColor: colors.border },
-    label: { color: colors.text },
-  },
-  ghost: {
-    container: { backgroundColor: 'transparent' },
-    pressed: { backgroundColor: colors.surfaceRaised },
-    label: { color: colors.accent },
-  },
-  danger: {
-    container: { backgroundColor: colors.dangerSoft, borderWidth: 1, borderColor: 'rgba(255,107,107,0.3)' },
-    pressed: { backgroundColor: 'rgba(255,107,107,0.2)' },
-    label: { color: colors.danger },
-  },
-};
-
-/* -------------------------------------------------------------------- Card */
 
 export function Card({
   children,
   style,
-  padded = true,
 }: {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
-  padded?: boolean;
 }) {
-  return <View style={[styles.card, padded && styles.cardPadded, style]}>{children}</View>;
-}
-
-/* -------------------------------------------------------------------- Chip */
-
-export function Chip({
-  label,
-  tone = 'neutral',
-  style,
-}: {
-  label: string;
-  tone?: 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
-  style?: StyleProp<ViewStyle>;
-}) {
-  const tones = {
-    neutral: { bg: colors.surfaceRaised, fg: colors.textMuted, border: colors.border },
-    accent: { bg: colors.accentSoft, fg: colors.accent, border: colors.accentBorder },
-    success: { bg: 'rgba(74,222,128,0.12)', fg: colors.success, border: 'rgba(74,222,128,0.28)' },
-    warning: { bg: 'rgba(255,184,77,0.12)', fg: colors.warning, border: 'rgba(255,184,77,0.28)' },
-    danger: { bg: colors.dangerSoft, fg: colors.danger, border: 'rgba(255,107,107,0.28)' },
-  } as const;
-  const t = tones[tone];
+  const { colors } = useApp();
   return (
-    <View style={[styles.chip, { backgroundColor: t.bg, borderColor: t.border }, style]}>
-      <Text style={[styles.chipLabel, { color: t.fg }]}>{label}</Text>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.surface, borderColor: colors.line },
+        style,
+      ]}
+    >
+      {children}
     </View>
   );
 }
 
-/* --------------------------------------------------------------- Checkbox */
-
-export function Checkbox({
-  checked,
-  onToggle,
-  disabled,
-  size = 22,
-}: {
-  checked: boolean;
-  onToggle?: () => void;
+interface ButtonProps {
+  label?: string;
+  children?: ReactNode;
+  onPress?: () => void;
   disabled?: boolean;
-  size?: number;
-}) {
+  small?: boolean;
+  block?: boolean;
+  ghost?: boolean;
+  danger?: boolean;
+  icon?: IoniconName;
+  background?: string;
+  foreground?: string;
+  outline?: string;
+  style?: StyleProp<ViewStyle>;
+}
+
+export function Button({
+  label,
+  children,
+  onPress,
+  disabled,
+  small,
+  block,
+  ghost,
+  danger,
+  icon,
+  background,
+  foreground,
+  outline,
+  style,
+}: ButtonProps) {
+  const { colors } = useApp();
+  const bg = background ?? (ghost || danger ? 'transparent' : colors.brand);
+  const fg =
+    foreground ?? (danger ? colors.warn : ghost ? colors.brand : colors.onBrand);
+  const border = outline ?? (danger ? colors.warn : ghost ? colors.brand : 'transparent');
+
   return (
     <Pressable
-      accessibilityRole="checkbox"
+      accessibilityRole="button"
       disabled={disabled}
-      {...a11yState({ checked, disabled: !!disabled })}
-      onPress={(e) => {
-        // The checkbox frequently sits inside a pressable card. Stop the
-        // event so ticking a task does not also open the task.
-        e.stopPropagation?.();
-        onToggle?.();
-      }}
-      hitSlop={10}
-      style={[
-        styles.checkbox,
-        { width: size, height: size, borderRadius: size / 3 },
-        checked && styles.checkboxOn,
-        disabled && styles.checkboxDisabled,
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.button,
+        small ? styles.buttonSmall : null,
+        block ? styles.buttonBlock : null,
+        {
+          backgroundColor: bg,
+          borderColor: border,
+          borderWidth: ghost || danger ? 1.5 : 0,
+          opacity: disabled ? 0.5 : pressed ? 0.82 : 1,
+        },
+        style,
       ]}
     >
-      {checked ? <Text style={styles.checkmark}>✓</Text> : null}
+      {icon ? <Icon name={icon} size={small ? 15 : 18} color={fg} /> : null}
+      {label ? (
+        <Text
+          style={{
+            color: fg,
+            fontFamily: fonts.bold,
+            fontSize: small ? 13 : 14,
+          }}
+        >
+          {label}
+        </Text>
+      ) : null}
+      {children}
     </Pressable>
   );
 }
 
-/* ------------------------------------------------------------- SectionHead */
-
-export function SectionHead({
-  title,
-  action,
-  onAction,
-  style,
-}: {
-  title: string;
-  action?: string;
-  onAction?: () => void;
-  style?: StyleProp<ViewStyle>;
-}) {
-  return (
-    <View style={[styles.sectionHead, style]}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {action ? (
-        <Pressable onPress={onAction} hitSlop={8}>
-          <Text style={styles.sectionAction}>{action}</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-
-/* --------------------------------------------------------------- StatTile */
-
-export function StatTile({
-  label,
-  value,
-  sub,
-  tone = 'neutral',
-  style,
-}: {
+interface SegmentedOption<T extends string | number> {
+  value: T;
   label: string;
-  value: string;
-  sub?: string;
-  tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
+}
+
+interface SegmentedProps<T extends string | number> {
+  options: Array<SegmentedOption<T>>;
+  value: T;
+  onChange: (value: T) => void;
   style?: StyleProp<ViewStyle>;
-}) {
-  const tones = {
-    neutral: colors.text,
-    success: colors.success,
-    warning: colors.warning,
-    danger: colors.danger,
-    accent: colors.accent,
-  } as const;
+}
+
+export function Segmented<T extends string | number>({
+  options,
+  value,
+  onChange,
+  style,
+}: SegmentedProps<T>) {
+  const { colors } = useApp();
   return (
-    <View style={[styles.statTile, style]}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={[styles.statValue, { color: tones[tone] }]}>{value}</Text>
-      {sub ? <Text style={styles.statSub}>{sub}</Text> : null}
+    <View
+      style={[
+        styles.seg,
+        { backgroundColor: colors.surface, borderColor: colors.line },
+        style,
+      ]}
+    >
+      {options.map((option) => {
+        const active = String(option.value) === String(value);
+        return (
+          <Pressable
+            key={String(option.value)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            aria-pressed={active}
+            onPress={() => onChange(option.value)}
+            style={[
+              styles.segButton,
+              active ? { backgroundColor: colors.brand } : null,
+            ]}
+          >
+            <Text
+              style={{
+                color: active ? colors.onBrand : colors.muted,
+                fontFamily: active ? fonts.bold : fonts.semibold,
+                fontSize: 13,
+              }}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
-/* ------------------------------------------------------------- ProgressBar */
-
-export function ProgressBar({
-  value,
-  tone = colors.accent,
-  height = 6,
+export function Meter({
+  percent,
+  color,
+  track,
+  height = 8,
   style,
 }: {
-  value: number;
-  tone?: string;
+  percent: number;
+  color: string;
+  track?: string;
   height?: number;
   style?: StyleProp<ViewStyle>;
 }) {
-  const pct = Math.max(0, Math.min(1, value));
+  const { colors } = useApp();
+
   return (
-    <View style={[styles.progressTrack, { height, borderRadius: height / 2 }, style]}>
+    <View
+      style={[
+        styles.meter,
+        {
+          backgroundColor: track ?? colors.line,
+          height,
+          borderRadius: height,
+        },
+        style,
+      ]}
+    >
       <View
         style={{
-          width: `${pct * 100}%`,
+          width: `${Math.max(0, Math.min(100, percent))}%`,
           height: '100%',
-          borderRadius: height / 2,
-          backgroundColor: tone,
+          borderRadius: height,
+          backgroundColor: color,
         }}
       />
     </View>
   );
 }
 
-/* ----------------------------------------------------------------- Divider */
-
-export function Divider({ style }: { style?: StyleProp<ViewStyle> }) {
-  return <View style={[styles.divider, style]} />;
-}
-
-/* ------------------------------------------------------------ EmptyState */
-
-export function EmptyState({
-  icon,
-  title,
-  body,
-  action,
-  onAction,
-}: {
-  icon: string;
-  title: string;
-  body?: string;
-  action?: string;
-  onAction?: () => void;
-}) {
+export function EffortPill({ effort }: { effort: Effort }) {
+  const { colors } = useApp();
   return (
-    <View style={styles.empty}>
-      <Text style={styles.emptyIcon}>{icon}</Text>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      {body ? <Text style={styles.emptyBody}>{body}</Text> : null}
-      {action && onAction ? (
-        <Button label={action} onPress={onAction} style={styles.emptyAction} />
-      ) : null}
+    <View
+      style={{
+        backgroundColor: colors.accent,
+        borderRadius: 99,
+        paddingHorizontal: 9,
+        paddingVertical: 2,
+        alignSelf: 'flex-start',
+      }}
+    >
+      <Text
+        style={{
+          color: colors.onAccent,
+          fontFamily: fonts.semibold,
+          fontSize: 11,
+        }}
+      >
+        {effortLabel(effort)}
+      </Text>
     </View>
   );
 }
 
+export function Toggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+}) {
+  const { colors } = useApp();
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityLabel={label}
+      accessibilityState={{ checked }}
+      aria-checked={checked}
+      onPress={onChange}
+      style={{
+        width: 48,
+        height: 28,
+        borderRadius: 99,
+        backgroundColor: checked ? colors.brand : colors.low,
+        justifyContent: 'center',
+      }}
+    >
+      <View
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          backgroundColor: '#fff',
+          marginLeft: checked ? 23 : 3,
+        }}
+      />
+    </Pressable>
+  );
+}
+
+export function Empty({
+  children,
+  style,
+}: {
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { colors } = useApp();
+  return (
+    <View style={[styles.empty, style]}>
+      <Text
+        style={[
+          type.sub,
+          { color: colors.muted, textAlign: 'center', fontFamily: fonts.regular },
+        ]}
+      >
+        {children}
+      </Text>
+    </View>
+  );
+}
+
+export function BackButton({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: () => void;
+}) {
+  const { colors } = useApp();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.back,
+        { opacity: pressed ? 0.7 : 1 },
+      ]}
+    >
+      <Icon name="chevron-back" size={18} color={colors.brand} />
+      <Text
+        style={{
+          color: colors.brand,
+          fontFamily: fonts.semibold,
+          fontSize: 14,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  btn: {
-    minHeight: 46,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
+  label: {
+    marginTop: 22,
+    marginBottom: 8,
   },
-  btnLg: { minHeight: 54, borderRadius: radius.lg },
-  btnFull: { alignSelf: 'stretch' },
-  btnDisabled: { opacity: 0.45 },
-  btnLabel: { ...type.bodyStrong },
-  btnLabelLg: { fontSize: 16 },
-
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 18,
+    padding: 14,
   },
-  cardPadded: { padding: spacing.lg },
-
-  chip: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    alignSelf: 'flex-start',
-  },
-  chipLabel: { ...type.micro },
-
-  checkbox: {
-    borderWidth: 2,
-    borderColor: colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-  checkboxDisabled: { opacity: 0.4 },
-  checkmark: { color: colors.white, fontSize: 13, fontWeight: '900', lineHeight: 16 },
-
-  sectionHead: {
+  button: {
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    justifyContent: 'center',
+    gap: 6,
   },
-  sectionTitle: { ...type.heading, color: colors.text },
-  sectionAction: { ...type.caption, color: colors.accent },
-
-  statTile: {
-    flex: 1,
-    backgroundColor: colors.surfaceRaised,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+  buttonSmall: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
   },
-  statLabel: { ...type.micro, color: colors.textFaint, textTransform: 'uppercase' },
-  statValue: { fontSize: 22, fontWeight: '700', marginTop: 6 },
-  statSub: { ...type.caption, color: colors.textMuted, marginTop: 2 },
-
-  progressTrack: {
-    backgroundColor: colors.surfaceRaised,
-    overflow: 'hidden',
+  buttonBlock: {
     width: '100%',
   },
-
-  divider: { height: 1, backgroundColor: colors.border },
-
-  empty: { alignItems: 'center', paddingVertical: spacing.xxl, paddingHorizontal: spacing.lg },
-  emptyIcon: { fontSize: 40, marginBottom: spacing.md },
-  emptyTitle: { ...type.heading, color: colors.text, textAlign: 'center' },
-  emptyBody: {
-    ...type.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: 6,
-    maxWidth: 280,
+  seg: {
+    flexDirection: 'row',
+    gap: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    padding: 3,
   },
-  emptyAction: { marginTop: spacing.lg },
+  segButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 999,
+  },
+  meter: {
+    overflow: 'hidden',
+  },
+  empty: {
+    paddingVertical: 26,
+    paddingHorizontal: 10,
+  },
+  back: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingBottom: 12,
+    alignSelf: 'flex-start',
+  },
 });

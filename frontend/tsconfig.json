@@ -4,19 +4,12 @@
     "strict": true
   },
   "include": [
-    "app/**/*.ts",
-    "app/**/*.tsx",
+    "App.tsx",
+    "index.ts",
     "src/**/*.ts",
     "src/**/*.tsx"
   ],
   "exclude": [
-    "node_modules",
-    "src/screens/**",
-    "src/state.tsx",
-    "src/components/TaskRow.tsx",
-    "src/components/TaskSheet.tsx",
-    "src/components/TabBar.tsx",
-    "src/components/Toast.tsx",
-    "src/components/EnergyStrip.tsx"
+    "node_modules"
   ]
 }

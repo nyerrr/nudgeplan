@@ -1,66 +1,81 @@
-/**
- * NudgePlan design tokens.
- *
- * One dark theme, tuned for low-light evening use and for a focus app:
- * low chroma surfaces so task content is the only saturated thing on
- * screen, with energy/priority colour used sparingly as signal.
- */
+import type { TextStyle } from 'react-native';
 
-export const colors = {
-  // Surfaces, darkest to lightest
-  bg: '#0B0D12',
-  surface: '#141821',
-  surfaceRaised: '#1C2029',
-  surfaceInput: '#11141B',
-  border: '#232833',
-  borderStrong: '#313746',
+import type { Effort, ResolvedTheme } from './types';
 
-  // Text
-  text: '#F2F5F9',
-  textMuted: '#98A1B0',
-  textFaint: '#5D6675',
-  textInverse: '#0B0D12',
+export interface Palette {
+  bg: string;
+  glow: string;
+  surface: string;
+  surface2: string;
+  ink: string;
+  muted: string;
+  line: string;
+  brand: string;
+  onBrand: string;
+  accent: string;
+  onAccent: string;
+  warn: string;
+  onWarn: string;
+  high: string;
+  med: string;
+  low: string;
+  bezel: string;
+  shadow: string;
+  overlay: string;
+}
 
-  // Brand
-  accent: '#6C8CFF',
-  accentPressed: '#5A7BF0',
-  accentSoft: 'rgba(108, 140, 255, 0.14)',
-  accentBorder: 'rgba(108, 140, 255, 0.32)',
+const cleanMistLight: Palette = {
+  bg: '#F4F7FA',
+  glow: '#E3EAF2',
+  surface: '#E3EAF2',
+  surface2: '#D7E2EE',
+  ink: '#0F172A',
+  muted: '#475569',
+  line: '#94A3B8',
+  brand: '#2563EB',
+  onBrand: '#FFFFFF',
+  accent: '#3F8EFC',
+  onAccent: '#0F172A',
+  warn: '#B91C1C',
+  onWarn: '#FFFFFF',
+  high: '#2563EB',
+  med: '#3F8EFC',
+  low: '#64748B',
+  bezel: '#94A3B8',
+  shadow: 'rgba(15,23,42,.12)',
+  overlay: 'rgba(15,23,42,.4)',
+};
 
-  // Energy scale - used for check-in and per-task energy load
-  energyLow: '#FF6B6B',
-  energyMedium: '#FFB84D',
-  energyHigh: '#4ADE80',
+const cleanMistDark: Palette = {
+  bg: '#0F172A',
+  glow: '#1E293B',
+  surface: '#1E293B',
+  surface2: '#334155',
+  ink: '#F3F4F6',
+  muted: '#CBD5E1',
+  line: '#64748B',
+  brand: '#60A5FA',
+  onBrand: '#0F172A',
+  accent: '#93C5FD',
+  onAccent: '#0F172A',
+  warn: '#FCA5A5',
+  onWarn: '#450A0A',
+  high: '#60A5FA',
+  med: '#93C5FD',
+  low: '#94A3B8',
+  bezel: '#020617',
+  shadow: 'rgba(2,6,23,.45)',
+  overlay: 'rgba(2,6,23,.72)',
+};
 
-  // Status
-  success: '#4ADE80',
-  warning: '#FFB84D',
-  danger: '#FF6B6B',
-  dangerSoft: 'rgba(255, 107, 107, 0.12)',
+export const palettes: Record<ResolvedTheme, Palette> = {
+  light: cleanMistLight,
+  dark: cleanMistDark,
+};
 
-  // Overlays
-  scrim: 'rgba(0, 0, 0, 0.6)',
-  white: '#FFFFFF',
-} as const;
-
-export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 28,
-  xxxl: 40,
-} as const;
-
-export const radius = {
-  xs: 6,
-  sm: 10,
-  md: 14,
-  lg: 18,
-  xl: 24,
-  full: 999,
-} as const;
+export function paletteFor(mode: ResolvedTheme): Palette {
+  return palettes[mode];
+}
 
 export const fonts = {
   light: 'Poppins_300Light',
@@ -72,77 +87,50 @@ export const fonts = {
 } as const;
 
 export const type = {
-  display: { fontSize: 32, fontWeight: '700' as const, letterSpacing: -0.6 },
-  title: { fontSize: 24, fontWeight: '700' as const, letterSpacing: -0.4 },
-  heading: { fontSize: 18, fontWeight: '600' as const, letterSpacing: -0.2 },
-  body: { fontSize: 15, fontWeight: '400' as const },
-  bodyStrong: { fontSize: 15, fontWeight: '600' as const },
-  caption: { fontSize: 13, fontWeight: '500' as const },
-  micro: { fontSize: 11, fontWeight: '600' as const, letterSpacing: 0.4 },
-  sub: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-  hint: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 18 },
+  title: {
+    fontFamily: fonts.bold,
+    fontSize: 24,
+    lineHeight: 29,
+    letterSpacing: -0.24,
+  } satisfies TextStyle,
+  body: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    lineHeight: 20,
+  } satisfies TextStyle,
+  sub: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    lineHeight: 18,
+  } satisfies TextStyle,
   label: {
     fontFamily: fonts.semibold,
     fontSize: 12,
     lineHeight: 16,
     letterSpacing: 0.84,
-    textTransform: 'uppercase' as const,
-  },
-  semibold: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
-  bold: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 20 },
-} as const;
-
-/** Minimum comfortable touch target on mobile. */
-export const HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
-export const MIN_TOUCH = 44;
-
-export const energyColor = (level: EnergyLevel) => {
-  switch (level) {
-    case 'low':
-      return colors.energyLow;
-    case 'high':
-      return colors.energyHigh;
-    default:
-      return colors.energyMedium;
-  }
+    textTransform: 'uppercase',
+  } satisfies TextStyle,
+  hint: {
+    fontFamily: fonts.regular,
+    fontSize: 12.5,
+    lineHeight: 18,
+  } satisfies TextStyle,
+  semibold: {
+    fontFamily: fonts.semibold,
+    fontSize: 14,
+    lineHeight: 20,
+  } satisfies TextStyle,
+  bold: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    lineHeight: 20,
+  } satisfies TextStyle,
 };
 
-export const priorityColor = (priority: Priority) => {
-  switch (priority) {
-    case 'high':
-      return colors.danger;
-    case 'medium':
-      return colors.warning;
-    default:
-      return colors.textFaint;
-  }
-};
+export function effortColor(colors: Palette, effort: Effort): string {
+  return effort === 'high' ? colors.high : effort === 'med' ? colors.med : colors.low;
+}
 
-export type EnergyLevel = 'low' | 'medium' | 'high';
-export type Priority = 'high' | 'medium' | 'low';
-export type TaskStatus = 'todo' | 'done';
-
-/** A task as the app understands it. */
-export type Task = {
-  id: string;
-  title: string;
-  /** Estimated minutes of focused work. */
-  minutes: number;
-  energy: EnergyLevel;
-  priority: Priority;
-  /** ISO date, e.g. "2026-10-22". */
-  due?: string;
-  /** Micro-steps. Present once the Micro-Step Guard has run. */
-  steps: string[];
-  done: boolean;
-  /** True when the Reality Check moved this off today. */
-  deferred?: boolean;
-  note?: string;
-};
-
-/**
- * A task the user has seen but not yet committed to their plan.
- * The difference from `Task` is that pending tasks have no completion
- * state and no scheduling decisions yet.
- */
-export type PendingTask = Omit<Task, 'done' | 'deferred'>;
+export function effortLabel(effort: Effort): string {
+  return effort === 'high' ? 'High' : effort === 'med' ? 'Medium' : 'Low';
+}
