@@ -21,6 +21,7 @@ shared by the backend and the mobile client.
 | **Focus** | Task picker, Micro-Step Guard breakdown, countdown timer, step checklists, "make it smaller" |
 | **Insights** | Completion history, capacity, micro-step count, check-in streak, recent reality checks |
 | **Profile** | Name, working hours, nudges, auto/light/dark theme, prototype demos, reset |
+| **Sign-in** | Google/email preview login with guest skip, persisted session, and sign-out from Profile. Provider wiring is stubbed until Supabase is connected. |
 | **About** | Product story, problem/solution, audience, roadmap, and team |
 
 The current prototype keeps its plan in memory. Persistence and notifications

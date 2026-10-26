@@ -261,23 +261,21 @@ export function Toggle({
       accessibilityState={{ checked }}
       aria-checked={checked}
       onPress={onChange}
-      style={{
-        width: 48,
-        height: 28,
-        borderRadius: 99,
-        backgroundColor: checked ? colors.brand : colors.low,
-        justifyContent: 'center',
-      }}
+      style={styles.toggleHit}
     >
       <View
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 11,
-          backgroundColor: '#fff',
-          marginLeft: checked ? 23 : 3,
-        }}
-      />
+        style={[
+          styles.toggleTrack,
+          { backgroundColor: checked ? colors.brand : colors.low },
+        ]}
+      >
+        <View
+          style={[
+            styles.toggleThumb,
+            { marginLeft: checked ? 23 : 3 },
+          ]}
+        />
+      </View>
     </Pressable>
   );
 }
@@ -346,6 +344,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   button: {
+    minHeight: 44,
     borderRadius: 999,
     paddingHorizontal: 18,
     paddingVertical: 10,
@@ -355,6 +354,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   buttonSmall: {
+    minHeight: 44,
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
@@ -369,6 +369,7 @@ const styles = StyleSheet.create({
     padding: 3,
   },
   segButton: {
+    minHeight: 44,
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -384,10 +385,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   back: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    paddingTop: 4,
     paddingBottom: 12,
     alignSelf: 'flex-start',
+  },
+  toggleHit: {
+    width: 48,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleTrack: {
+    width: 48,
+    height: 28,
+    borderRadius: 99,
+    justifyContent: 'center',
+  },
+  toggleThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#fff',
   },
 });

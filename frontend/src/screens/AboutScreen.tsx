@@ -68,6 +68,7 @@ const PHASES = [
 const TEAM = [
   ['RB', 'Ranier J. Burlasa', 'Back-end developer'],
   ['LR', 'Laurien Aemanuel Reyes', 'Front-end developer'],
+  ['DNO', 'Dave Nathaniel Olazo', 'Front-end developer, QA'],
 ];
 
 export function AboutScreen() {
@@ -246,12 +247,13 @@ export function AboutScreen() {
                 {initials}
               </Text>
             </View>
-            <View>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text
                 style={{
                   color: colors.ink,
                   fontFamily: fonts.semibold,
                   fontSize: 14,
+                  flexShrink: 1,
                 }}
               >
                 {name}
@@ -261,6 +263,8 @@ export function AboutScreen() {
                   color: colors.muted,
                   fontFamily: fonts.regular,
                   fontSize: 13,
+                  marginTop: 2,
+                  flexShrink: 1,
                 }}
               >
                 {role}

@@ -12,6 +12,7 @@ import {
 
 import { Icon, type IoniconName } from '../components/Icon';
 import { Button, Segmented, Toggle } from '../components/ui';
+import { useAuth } from '../auth';
 import { fmtHour } from '../lib/engine';
 import { useApp } from '../state';
 import { fonts, type } from '../theme';
@@ -40,8 +41,9 @@ const POINTS: Array<{ icon: IoniconName; title: string; body: string }> = [
 
 export function OnboardingScreen() {
   const { colors, completeOnboarding } = useApp();
+  const { user } = useAuth();
   const [step, setStep] = useState(0);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(user?.name.trim() ?? '');
   const [startH, setStartH] = useState(9);
   const [endH, setEndH] = useState(18);
   const [energy, setEnergy] = useState<Energy>('medium');
@@ -216,7 +218,9 @@ export function OnboardingScreen() {
                 { color: colors.muted, marginTop: 8, fontFamily: fonts.regular },
               ]}
             >
-              This stays on your device. No account, no sign-up.
+              {user?.provider === 'guest'
+                ? 'This stays on your device. You can add an account later from Profile.'
+                : "We'll use this for greetings. Your plan stays private on this device."}
             </Text>
 
             <TextInput
@@ -464,6 +468,7 @@ const styles = StyleSheet.create({
     minHeight: 28,
   },
   back: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -528,10 +533,13 @@ const styles = StyleSheet.create({
     paddingRight: 18,
   },
   chip: {
+    minHeight: 44,
     borderWidth: 1,
     borderRadius: 99,
     paddingVertical: 7,
     paddingHorizontal: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   setrow: {
     flexDirection: 'row',

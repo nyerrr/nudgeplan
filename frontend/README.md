@@ -95,6 +95,17 @@ Find your LAN IP with `ipconfig` (look for IPv4 Address).
 - Profile and About screens reachable from Home and Profile
 - Custom state-based tab navigator (no react-navigation dependency)
 
+### Sign-in (preview)
+
+- First launch shows a login screen with Google, email magic-link, and
+  "Continue without an account"
+- Sessions persist locally, and Profile shows the current account with sign-out
+- Google and email are simulated until an auth provider is connected; the UI
+  already talks to a small adapter in `src/lib/auth.ts`
+- Add `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` to `.env`
+  when wiring Supabase later, then replace the demo adapter functions
+- Guest mode keeps the app fully offline and usable without an account
+
 ### Home
 
 - Time-aware greeting and quick brain-dump bar with a simulated voice sample

@@ -8,7 +8,7 @@ import { fonts, type } from '../theme';
 const SECTIONS: Array<{ title: string; body: string }> = [
   {
     title: 'What stays on your device',
-    body: 'Your name, working hours, tasks, focus steps, check-ins, and completion history are stored only in this app on this device. There is no NudgePlan account, and nothing is uploaded to a cloud database.',
+    body: 'Your name, working hours, tasks, focus steps, check-ins, and completion history are stored in this app on this device. You can use NudgePlan without an account. If you sign in, your sign-in session is also stored on this device; your plan is not uploaded to a cloud database yet.',
   },
   {
     title: 'When text leaves the device',

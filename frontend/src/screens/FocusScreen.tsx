@@ -167,6 +167,7 @@ export function FocusScreen() {
           >
             <View style={[styles.pickerOverlay, { backgroundColor: colors.overlay }]}>
               <Pressable
+                accessibilityRole="button"
                 accessibilityLabel="Close task picker"
                 style={StyleSheet.absoluteFill}
                 onPress={() => setPickerOpen(false)}
@@ -255,7 +256,7 @@ export function FocusScreen() {
                             event.stopPropagation();
                             confirmDelete(task.id, task.title);
                           }}
-                          hitSlop={8}
+                          style={styles.pickerDelete}
                         >
                           <Icon name="trash-outline" size={17} color={colors.warn} />
                         </Pressable>
@@ -504,23 +505,27 @@ export function FocusScreen() {
                         aria-checked={step.done}
                         accessibilityLabel={`Toggle step: ${step.text}`}
                         onPress={() => toggleStep(selected.id, step.id)}
-                        style={[
-                          styles.check,
-                          {
-                            borderColor: step.done
-                              ? colors.brand
-                              : colors.low,
-                            backgroundColor: step.done
-                              ? colors.brand
-                              : 'transparent',
-                          },
-                        ]}
+                        style={styles.checkHit}
                       >
-                        <Icon
-                          name="checkmark"
-                          size={15}
-                          color={step.done ? colors.onBrand : 'transparent'}
-                        />
+                        <View
+                          style={[
+                            styles.check,
+                            {
+                              borderColor: step.done
+                                ? colors.brand
+                                : colors.low,
+                              backgroundColor: step.done
+                                ? colors.brand
+                                : 'transparent',
+                            },
+                          ]}
+                        >
+                          <Icon
+                            name="checkmark"
+                            size={15}
+                            color={step.done ? colors.onBrand : 'transparent'}
+                          />
+                        </View>
                       </Pressable>
                       <Text
                         style={{
@@ -622,7 +627,19 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   closePicker: {
-    padding: 4,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerDelete: {
+    width: 44,
+    height: 44,
+    marginVertical: -10,
+    marginRight: -8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pickerOptions: {
     gap: 8,
@@ -650,6 +667,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   stepsToggle: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -698,6 +716,15 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 9,
     paddingHorizontal: 12,
+  },
+  checkHit: {
+    width: 44,
+    height: 44,
+    marginVertical: -10,
+    marginLeft: -10,
+    marginRight: -10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   check: {
     width: 24,

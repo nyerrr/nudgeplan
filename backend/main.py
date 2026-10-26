@@ -12,10 +12,7 @@ generation degrades into something usable instead of breaking the UI.
 import json
 import os
 import re
-<<<<<<< HEAD
-=======
 import secrets
->>>>>>> 2e34589577a37d3aca662764f890876c8089b5be
 from datetime import date, timedelta
 from typing import Literal
 
@@ -24,11 +21,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from pydantic import BaseModel, Field
-<<<<<<< HEAD
-=======
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
->>>>>>> 2e34589577a37d3aca662764f890876c8089b5be
 
 import planner
 
@@ -51,17 +45,10 @@ api_auth_token = os.getenv("API_AUTH_TOKEN", "").strip()
 
 app.add_middleware(
     CORSMiddleware,
-<<<<<<< HEAD
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-=======
     allow_origins=configured_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "X-API-Key"],
->>>>>>> 2e34589577a37d3aca662764f890876c8089b5be
 )
 
 

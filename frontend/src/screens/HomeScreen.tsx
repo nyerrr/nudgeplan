@@ -447,9 +447,9 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -464,6 +464,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   askInput: {
+    minHeight: 44,
     flex: 1,
     minWidth: 0,
     paddingVertical: 8,
@@ -471,9 +472,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   round: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -515,6 +516,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   adjustPlan: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,

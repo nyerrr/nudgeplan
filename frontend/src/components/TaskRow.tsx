@@ -69,19 +69,23 @@ export function TaskRow({
           aria-checked={task.done}
           accessibilityLabel={`Mark done: ${task.title}`}
           onPress={onCheck}
-          style={[
-            styles.check,
-            {
-              borderColor: task.done ? colors.brand : colors.low,
-              backgroundColor: task.done ? colors.brand : 'transparent',
-            },
-          ]}
+          style={styles.checkHit}
         >
-          <Icon
-            name="checkmark"
-            size={16}
-            color={task.done ? colors.onBrand : 'transparent'}
-          />
+          <View
+            style={[
+              styles.check,
+              {
+                borderColor: task.done ? colors.brand : colors.low,
+                backgroundColor: task.done ? colors.brand : 'transparent',
+              },
+            ]}
+          >
+            <Icon
+              name="checkmark"
+              size={16}
+              color={task.done ? colors.onBrand : 'transparent'}
+            />
+          </View>
         </Pressable>
 
         <View style={styles.body}>
@@ -143,6 +147,14 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 11,
     paddingHorizontal: 12,
+  },
+  checkHit: {
+    width: 44,
+    height: 44,
+    marginLeft: -9,
+    marginRight: -9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   check: {
     width: 26,

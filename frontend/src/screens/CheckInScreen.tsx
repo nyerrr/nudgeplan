@@ -352,6 +352,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   examplesToggle: {
+    minHeight: 44,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -391,10 +392,12 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   quickExample: {
+    minHeight: 44,
     borderWidth: 1,
     borderRadius: 999,
     paddingVertical: 8,
     paddingHorizontal: 12,
+    justifyContent: 'center',
   },
   compactExamples: {
     flexDirection: 'row',
@@ -404,6 +407,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   compactExample: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
@@ -476,6 +480,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   askInput: {
+    minHeight: 44,
     flex: 1,
     minWidth: 0,
     paddingVertical: 8,
@@ -483,9 +488,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   round: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },

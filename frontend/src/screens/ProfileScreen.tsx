@@ -16,11 +16,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import {
   BackButton,
+  Button,
   Card,
   Label,
   Segmented,
   Toggle,
 } from '../components/ui';
+import { useAuth } from '../auth';
 import { fmtHour } from '../lib/engine';
 import { useApp } from '../state';
 import { fonts, type } from '../theme';
@@ -44,13 +46,31 @@ export function ProfileScreen() {
     aiInfo,
     checkAi,
   } = useApp();
+  const { user, signOut } = useAuth();
   const [nameDraft, setNameDraft] = useState(state.name);
   const [timePicker, setTimePicker] = useState<'start' | 'end' | null>(null);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
     setNameDraft(state.name);
   }, [state.name]);
+
+  useEffect(() => {
+    setConfirmSignOut(false);
+  }, [user?.id]);
+
+  const accountProvider =
+    user?.provider === 'google'
+      ? 'Google'
+      : user?.provider === 'email'
+        ? 'Email link'
+        : 'Guest';
+  const signingOut = () => {
+    setConfirmSignOut(false);
+    go('home');
+    void signOut();
+  };
 
   const startHours = [5, 6, 7, 8, 9, 10, 11, 12];
   const endHours = [14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
@@ -76,6 +96,117 @@ export function ProfileScreen() {
           </Text>
         </View>
       </View>
+
+      <Label>Account</Label>
+      <Card style={{ paddingVertical: 2 }}>
+        <View style={styles.accountRow}>
+          <View
+            style={[styles.accountIcon, { backgroundColor: colors.surface2 }]}
+          >
+            <Icon
+              name={
+                user?.provider === 'google'
+                  ? 'logo-google'
+                  : user?.provider === 'email'
+                    ? 'mail-outline'
+                    : 'person-outline'
+              }
+              size={18}
+              color={colors.brand}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.accountTitle, { color: colors.ink }]}>
+              {user?.provider === 'guest'
+                ? 'Guest mode'
+                : user?.name || user?.email || 'Signed in'}
+            </Text>
+            <Text style={[styles.accountMeta, { color: colors.muted }]}>
+              {user?.provider === 'guest'
+                ? 'Your plan is stored on this device.'
+                : `${user?.email ?? ''} · Signed in with ${accountProvider}`}
+            </Text>
+          </View>
+          {user?.provider !== 'guest' ? (
+            <View
+              style={[styles.accountBadge, { backgroundColor: colors.accent }]}
+            >
+              <Text
+                style={[
+                  styles.accountBadgeText,
+                  { color: colors.onAccent },
+                ]}
+              >
+                {accountProvider}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        {confirmSignOut ? (
+          <View
+            style={[
+              styles.signOutConfirm,
+              { borderTopColor: colors.line },
+            ]}
+          >
+            <Text style={[styles.signOutTitle, { color: colors.ink }]}>
+              {user?.provider === 'guest'
+                ? 'Leave guest mode?'
+                : 'Log out of NudgePlan?'}
+            </Text>
+            <Text style={[styles.signOutBody, { color: colors.muted }]}>
+              Your plan and history stay on this device.
+            </Text>
+            <View style={styles.signOutActions}>
+              <Button
+                small
+                ghost
+                label="Cancel"
+                onPress={() => setConfirmSignOut(false)}
+              />
+              <Button
+                small
+                label={user?.provider === 'guest' ? 'Sign in' : 'Log out'}
+                onPress={signingOut}
+              />
+            </View>
+          </View>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              user?.provider === 'guest'
+                ? 'Sign in or create an account'
+                : 'Log out'
+            }
+            onPress={() => setConfirmSignOut(true)}
+            style={({ pressed }) => [
+              styles.accountAction,
+              {
+                backgroundColor: colors.surface2,
+                borderColor: colors.line,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <Icon
+              name={
+                user?.provider === 'guest'
+                  ? 'log-in-outline'
+                  : 'log-out-outline'
+              }
+              size={17}
+              color={colors.brand}
+            />
+            <Text style={[styles.accountActionText, { color: colors.brand }]}>
+              {user?.provider === 'guest'
+                ? 'Sign in or create an account'
+                : 'Log out'}
+            </Text>
+          </Pressable>
+        )}
+      </Card>
 
       <Card style={{ marginTop: 14 }}>
         <Text
@@ -204,6 +335,7 @@ export function ProfileScreen() {
       >
         <View style={[styles.pickerOverlay, { backgroundColor: colors.overlay }]}>
           <Pressable
+            accessibilityRole="button"
             accessibilityLabel="Close time picker"
             style={StyleSheet.absoluteFill}
             onPress={() => setTimePicker(null)}
@@ -549,6 +681,75 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    paddingVertical: 12,
+  },
+  accountIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 14,
+  },
+  accountMeta: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  accountBadge: {
+    borderRadius: 99,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
+  accountBadgeText: {
+    fontFamily: fonts.semibold,
+    fontSize: 10.5,
+    letterSpacing: 0.3,
+  },
+  accountAction: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 2,
+    marginBottom: 12,
+  },
+  accountActionText: {
+    fontFamily: fonts.semibold,
+    fontSize: 13,
+  },
+  signOutConfirm: {
+    borderTopWidth: 1,
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  signOutTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 13,
+  },
+  signOutBody: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+  signOutActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 10,
+  },
   scheduleSummary: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -584,6 +785,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   input: {
+    minHeight: 44,
     borderWidth: 1.5,
     borderRadius: 12,
     paddingVertical: 10,
@@ -621,9 +823,9 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   closeButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -650,6 +852,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   smallBtn: {
+    minHeight: 44,
     borderWidth: 1,
     borderRadius: 999,
     paddingVertical: 6,

@@ -123,6 +123,7 @@ export function TaskSheet() {
     >
       <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
         <Pressable
+          accessibilityRole="button"
           accessibilityLabel="Close task sheet"
           style={StyleSheet.absoluteFill}
           onPress={closeTaskSheet}
@@ -195,6 +196,9 @@ export function TaskSheet() {
                   return (
                     <Pressable
                       key={minutes}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      aria-pressed={active}
                       onPress={() => setDuration(minutes)}
                       style={[
                         styles.chip,
@@ -375,6 +379,8 @@ const styles = StyleSheet.create({
   },
   sheet: {
     width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
     maxHeight: '94%',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -388,9 +394,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   iconButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -401,6 +407,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   input: {
+    minHeight: 44,
     borderWidth: 1.5,
     borderRadius: 12,
     paddingVertical: 10,
@@ -414,10 +421,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chip: {
+    minWidth: 44,
+    minHeight: 44,
     borderWidth: 1,
     borderRadius: 99,
     paddingVertical: 6,
     paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actions: {
     flexDirection: 'row',
@@ -443,9 +454,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   deleteButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',

@@ -30,7 +30,12 @@ export function Toast() {
           {toast.message}
         </Text>
         {toast.undo ? (
-          <Pressable accessibilityRole="button" onPress={undo}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Undo"
+            onPress={undo}
+            style={styles.undoHit}
+          >
             <Text
               style={{
                 color: colors.bg,
@@ -65,5 +70,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 15,
     elevation: 8,
+  },
+  undoHit: {
+    minWidth: 44,
+    minHeight: 44,
+    marginVertical: -12,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
