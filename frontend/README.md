@@ -4,6 +4,41 @@ The mobile app is Android-first but runs in the browser for fast iteration. It
 works offline by default: planning, scheduling, Reality Check, and micro-step
 generation all run locally in `src/lib/engine.ts`.
 
+## Run the frontend and backend
+
+Use two separate PowerShell terminals from the repository root.
+
+### Terminal 1: Backend
+
+```powershell
+cd C:\Users\Dave\nudgeplan\backend  
+
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env
+python run.py
+```
+
+The backend runs at http://localhost:8001. Verify it is running with:
+
+```powershell
+Invoke-RestMethod http://localhost:8001/health
+```
+
+The default `.env` uses offline mode, so a Gemini API key is not required.
+
+### Terminal 2: Frontend
+
+```powershell
+cd C:\Users\Dave\nudgeplan\frontend
+npm install
+npx expo start --web
+```
+
+Open http://localhost:8081 in a browser. The frontend uses
+`http://localhost:8001` for the backend by default.
+
 ## Setup
 
 ```powershell
@@ -52,107 +87,46 @@ Find your LAN IP with `ipconfig` (look for IPv4 Address).
 
 `EXPO_PUBLIC_API_URL` overrides all of these.
 
-## Navigation
-
-Routing is file-based via [expo-router](https://docs.expo.dev/router/introduction/).
-The file tree *is* the navigation structure.
-
-```
-app/
-  _layout.tsx            Root stack: tabs + the three modal flows
-  (tabs)/
-    _layout.tsx          Bottom tab bar
-    index.tsx            Today     - daily plan, energy, Reality Check summary
-    dump.tsx             Dump      - conversational brain dump
-    plan.tsx             Plan      - every task, filterable
-    you.tsx              You       - preferences and settings
-  confirm.tsx            Modal - review and tune extracted tasks
-  reality-check.tsx      Modal - hours + energy, then suggested changes
-  task/[id].tsx          Modal - one task, with its micro-steps
-```
-
-The core loop is:
-
-```
-Dump  ->  Confirm  ->  Reality Check  ->  Today
-```
-
-`Today` is the landing surface. `Dump` is where you get things out of your
-head. `Plan` holds everything else. `You` holds defaults.
-
-## Project layout
-
-```
-src/
-  theme.ts                Design tokens: colours, spacing, radii, type scale
-  types.ts                Shared types
-  state.tsx               Central provider: state, persistence, actions, demos
-  lib/
-    engine.ts             Parsing, energy curve, scheduling, Reality Check, steps
-    api.ts                Backend calls with timeout and null fallback
-    storage.ts            AsyncStorage load/save
-    notifications.ts      Notification helpers
-    useVoiceInput.ts      Voice input hook
-  components/
-    ui.tsx                Primitives
-    TabBar.tsx            Bottom navigation
-    TaskRow.tsx           Task display
-    TaskSheet.tsx         Task create/edit
-    EnergyStrip.tsx       Energy visualization
-    Icon.tsx              Icon wrapper
-    Toast.tsx             Toast notifications
-  screens/                Home, Plan, Check-in, Focus, Insights, Profile, About, etc.
-```
-
-## Data flow
-
-The app can run fully offline - parsing, scheduling, Reality Check, and
-micro-step generation all run locally in `src/lib/engine.ts`. When the backend
-is available, `src/lib/api.ts` calls it; otherwise it falls back to the local
-engine.
-
-## Design system
-
-- Light and dark palettes from `src/theme.ts`
-- Poppins fonts, Ionicons, LinearGradient, and safe-area insets
-- Energy is colour coded: low/medium/high
-
 ## Current features
 
 ### Navigation
 
 - Home, Plan, Focus, and Insights tabs, plus a central Check-in button
 - Profile and About screens reachable from Home and Profile
-- Custom state-based tab navigator
+- Custom state-based tab navigator (no react-navigation dependency)
 
 ### Home
 
-- Time-aware greeting and quick brain-dump bar
+- Time-aware greeting and quick brain-dump bar with a simulated voice sample
 - Reality Check card: planned vs. open time, capacity %, move/keep actions
 - Low/Medium/High energy selector that re-runs the schedule
 - Up-next task list with inline completion
-- Nudges
+- Nudge card with "Start now" and "Later" actions
 
 ### Plan
 
 - Today/Tomorrow toggle
 - Capacity meter and energy-by-hour visualization
+- Peak-hour hint that counts high-effort tasks placed in the peak
 - Timeline of scheduled tasks and a "Needs room" section
-- Task sheet for create/edit/delete
+- Task sheet for create/edit/delete, including duration, effort, day, priority,
+  optional fixed start time, and "Break into steps"
 
 ### Check-in
 
 - Conversational chat with typing indicator
 - Demo chips for common brain dumps
 - Calls `POST /plan/checkin`; falls back to local parsing if the backend is down
-- Parsed task cards, capacity warning, and CTAs
+- Parsed task cards, capacity warning, and CTAs such as "Move N to tomorrow",
+  "View plan", and "Open focus"
 
 ### Focus (Micro-Step Guard)
 
 - Task picker for open tasks
 - Breaks a task into steps of 10 minutes or less
-- Countdown timer with Start/Pause, Reset
-- Step checklist and "Make it smaller"
+- Countdown timer with Start/Pause, Reset, and Skip 1 min
+- Step checklist, "Done with this step", and "Make it smaller"
+- Add your own step
 
 ### Insights
 
@@ -168,7 +142,22 @@ engine.
 ### Persistence and theme
 
 - AsyncStorage persists tasks, chat, history, settings, theme, and step progress
-- Light and dark themes
+- Poppins fonts, Ionicons, LinearGradient, and safe-area insets
+- Light and dark palettes from the original prototype
+
+## Code map
+
+```
+App.tsx                     App shell, fonts, screen switch
+src/state.tsx               Central provider: state, persistence, actions, demos
+src/theme.ts                Light/dark palettes and typography
+src/types.ts                Shared types
+src/lib/engine.ts           Parsing, energy curve, scheduling, Reality Check, steps
+src/lib/api.ts              Backend calls with timeout and null fallback
+src/lib/storage.ts          AsyncStorage load/save
+src/components/             UI kit, task rows, tab bar, toast, task sheet
+src/screens/                Home, Plan, Check-in, Focus, Insights, Profile, About
+```
 
 ## Testing and checks
 
@@ -177,8 +166,14 @@ npx tsc --noEmit
 npx expo export --platform web
 ```
 
-With the backend running (`python run.py` in `backend/`), try the check-in flow,
-Reality Check, Focus mode, and verify persistence after reload.
+With the backend running (`python run.py` in `backend/`), try:
+
+1. Check in with "I'm tired today. Study for the chem exam 90m, laundry".
+2. Confirm the Reality Check warning and "Move N to tomorrow".
+3. Open Focus, break down "Draft client proposal", start the timer, and complete
+   a step.
+4. Reload the page and confirm tasks, chat, and settings persist.
+5. Open Profile and run "Reset the demo" to return to the seeded state.
 
 If the backend is not running, the app still works; check-ins and breakdowns
-use the local engine.
+use the local engine, and the UI simply skips AI-authored wording.

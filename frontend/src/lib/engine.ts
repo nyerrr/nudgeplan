@@ -684,6 +684,7 @@ export function parseBrainDump(text: string): {
     }
     title = title
       .replace(/\s+/g, ' ')
+      .replace(/^(?:and|also|plus)(?:\s+|$)/i, '')
       .replace(TRAILING_PREP, '')
       .replace(EDGE_PUNCT, '')
       .trim();

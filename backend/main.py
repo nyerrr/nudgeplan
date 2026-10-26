@@ -12,14 +12,23 @@ generation degrades into something usable instead of breaking the UI.
 import json
 import os
 import re
+<<<<<<< HEAD
+=======
+import secrets
+>>>>>>> 2e34589577a37d3aca662764f890876c8089b5be
 from datetime import date, timedelta
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from pydantic import BaseModel, Field
+<<<<<<< HEAD
+=======
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+>>>>>>> 2e34589577a37d3aca662764f890876c8089b5be
 
 import planner
 
@@ -31,13 +40,51 @@ app = FastAPI(
     version="0.2.0",
 )
 
+configured_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ORIGINS", "http://localhost:8081,http://localhost:19006"
+    ).split(",")
+    if origin.strip()
+]
+api_auth_token = os.getenv("API_AUTH_TOKEN", "").strip()
+
 app.add_middleware(
     CORSMiddleware,
+<<<<<<< HEAD
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+=======
+    allow_origins=configured_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-API-Key"],
+>>>>>>> 2e34589577a37d3aca662764f890876c8089b5be
 )
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if (
+            api_auth_token
+            and request.method != "OPTIONS"
+            and request.url.path not in {"/", "/health"}
+        ):
+            supplied = request.headers.get("x-api-key", "")
+            if not secrets.compare_digest(supplied, api_auth_token):
+                return JSONResponse({"detail": "Authentication required"}, status_code=401)
+
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key) if api_key else None
@@ -128,7 +175,9 @@ class PlanPayload(BaseModel):
 
 
 class PlanRequest(BaseModel):
-    text: str = Field(..., min_length=1, description="Raw brain dump from the user.")
+    text: str = Field(
+        ..., min_length=1, max_length=12_000, description="Raw brain dump from the user."
+    )
 
 
 class PlanResponse(BaseModel):

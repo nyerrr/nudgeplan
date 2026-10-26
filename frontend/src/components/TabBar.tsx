@@ -64,7 +64,7 @@ export function TabBar() {
       {renderTab(TABS[1])}
       <Pressable
         accessibilityRole="tab"
-        accessibilityLabel="Check-in"
+        accessibilityLabel="Capture"
         accessibilityState={{ selected: screen === 'checkin' }}
         aria-selected={screen === 'checkin'}
         onPress={() => go('checkin')}
@@ -79,7 +79,7 @@ export function TabBar() {
           },
         ]}
       >
-        <Icon name="add" size={26} color={colors.onBrand} />
+        <Icon name="create-outline" size={24} color={colors.onBrand} />
       </Pressable>
       {renderTab(TABS[2])}
       {renderTab(TABS[3])}

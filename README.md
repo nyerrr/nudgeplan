@@ -23,14 +23,14 @@ shared by the backend and the mobile client.
 | **Profile** | Name, working hours, nudges, auto/light/dark theme, prototype demos, reset |
 | **About** | Product story, problem/solution, audience, roadmap, and team |
 
-Everything persists locally with AsyncStorage, including tasks, chat, theme,
-working hours, and completed steps.
+The current prototype keeps its plan in memory. Persistence and notifications
+are intentionally deferred until the storage model is settled.
 
 ## Architecture
 
 ```
-frontend/  React Native + Expo + TypeScript   (UI, local engine, persistence)
-backend/   Python + FastAPI + google-genai    (parsing, planning, AI calls)
+frontend/  React Native + Expo Router + TypeScript (UI and local plan state)
+backend/   Python + FastAPI + google-genai          (parsing and AI calls)
 ```
 
 ## The core loop
@@ -48,21 +48,25 @@ Dump  ->  Confirm  ->  Reality Check  ->  Today
   tomorrow").
 - **Today** - your steps, sized to start in under ten minutes.
 
-- `frontend/src/lib/engine.ts` - TypeScript port of parsing, capacity, scheduling,
-  Reality Check, and micro-step generation. Used offline and as an instant fallback.
-- `backend/engine.py` - Python mirror of the same rules, covered by `test_engine.py`.
-- `backend/main.py` - API routes. Gemini is optional; every route degrades to the
-  deterministic engine when mock mode is on or a call fails.
+- `frontend/app/` - Expo Router screens and modal flows.
+- `frontend/src/lib/realityCheck.ts` - deterministic capacity and workload rules.
+- `backend/main.py` - API routes and Gemini response validation. Gemini is
+  optional; mock mode uses the deterministic planner.
 
-Screens live in `frontend/src/screens/` as components, wired through `App.tsx` and the
-app state. See `frontend/README.md` for the map.
+See `frontend/README.md` for the route and component map.
 
 ## Quick start (no Android phone required)
 
 You can develop and test everything in a web browser. The code stays
 Android-first, so nothing needs to change when you get a device.
 
-### 1. Backend
+Run the backend and the frontend in **two separate PowerShell terminals** from
+the repository root. First-time setup only needs to be done once; after that,
+`python run.py` and `npx expo start --web` are the only two commands you need.
+
+### 1. Backend (Terminal 1)
+
+First-time setup:
 
 ```powershell
 cd backend
@@ -72,21 +76,36 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
+Start the server:
+
+```powershell
+cd backend
+python run.py
+```
+
+- API: http://localhost:8001
+- Health check: http://localhost:8001/health
+- Interactive docs: http://localhost:8001/docs
+
+Use `python run.py --reload` for auto-reload during development.
+
 `backend/.env.example` ships with `GEMINI_MOCK=true`, so it works with **no API key**.
 To use real AI later, get a free key at https://aistudio.google.com/apikey,
 paste it into `GEMINI_API_KEY`, and set `GEMINI_MOCK=false`.
 
-```powershell
-python run.py
-```
+### 2. Frontend (Terminal 2)
 
-Backend runs on http://localhost:8001
-
-### 2. Frontend
+First-time setup (skip if `frontend/node_modules` already exists):
 
 ```powershell
 cd frontend
 npm install
+```
+
+Start the dev server:
+
+```powershell
+cd frontend
 npx expo start --web
 ```
 
@@ -96,11 +115,21 @@ prototype demos.
 Navigation on web: `Today` / `Dump` / `Plan` / `You` along the bottom, plus
 the `Confirm`, `Reality Check`, and task detail screens that open on top.
 
-### 3. Test the API directly
+### 3. Pick your target
+
+| Target | Command | Backend URL |
+| ------ | ------- | ----------- |
+| Web browser | `npx expo start --web` | `http://localhost:8001` |
+| Android emulator | `npx expo start`, then press `a` | `http://10.0.2.2:8001` |
+| Physical Android phone | set `EXPO_PUBLIC_API_URL=http://<your-pc-lan-ip>:8001` in `frontend/.env`, then `npx expo start` | your PC's LAN IP |
+
+The web and emulator defaults live in `frontend/src/api/plan.ts`;
+`EXPO_PUBLIC_API_URL` overrides them.
+
+### 4. Test the API directly
 
 ```powershell
 cd backend
-python test_engine.py     # offline engine + API contract
 python test_pipeline.py   # offline, mocks the Gemini client
 python test_fallback.py   # offline, verifies the model fallback chain
 python test_gemini.py     # live, needs a real key and a running server
@@ -110,8 +139,8 @@ Frontend checks:
 
 ```powershell
 cd frontend
-npx tsc --noEmit
-npx expo export --platform web
+npm run typecheck
+npm run export:web
 ```
 
 ## API at a glance
@@ -119,13 +148,10 @@ npx expo export --platform web
 | Method | Path | Description |
 | ------ | ---- | ----------- |
 | GET | `/health` | Health + active model/mode |
-| POST | `/plan/checkin` | Brain dump -> parsed tasks, energy, reply |
-| POST | `/plan/steps` | Task -> micro-steps of 10 minutes or less |
-| POST | `/plan/schedule` | Tasks -> scheduled tasks + Reality Check |
-| POST | `/ai/plan` | Legacy brain dump -> list of micro-step strings |
+| POST | `/ai/plan` | Brain dump -> validated tasks and micro-steps |
 
 See `backend/README.md` for request/response examples and
-`frontend/README.md` for screen and state details.
+`frontend/README.md` for the route and state details.
 
 ## Troubleshooting
 

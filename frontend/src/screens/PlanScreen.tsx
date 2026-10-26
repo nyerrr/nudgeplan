@@ -66,15 +66,16 @@ export function PlanScreen() {
 
       <Card style={{ marginTop: 14 }}>
         <View style={styles.spread}>
-          <Text
-            style={{
-              color: colors.ink,
-              fontFamily: fonts.bold,
-              fontSize: 14,
-            }}
-          >
-            {fmtDuration(planned)} of {fmtDuration(available)}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.ink, fontFamily: fonts.bold, fontSize: 14 }}>
+              {fmtDuration(planned)} planned · {fmtDuration(available)} available
+            </Text>
+            <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12.5, marginTop: 4 }}>
+              {percent > 100
+                ? 'Your day is overloaded. Move a few tasks before you start.'
+                : 'Your schedule leaves room for realistic progress.'}
+            </Text>
+          </View>
           <View
             style={{
               backgroundColor: colors.accent,
@@ -100,37 +101,6 @@ export function PlanScreen() {
           track={colors.line}
           style={{ marginTop: 8 }}
         />
-        <Text
-          style={[
-            type.label,
-            {
-              color: colors.muted,
-              marginTop: 14,
-              marginBottom: 8,
-              fontFamily: fonts.semibold,
-            },
-          ]}
-        >
-          Your energy by hour
-        </Text>
-        <EnergyStrip />
-        <Text
-          style={[
-            type.hint,
-            {
-              color: colors.muted,
-              marginTop: 8,
-              fontFamily: fonts.regular,
-            },
-          ]}
-        >
-          {peaks.length
-            ? `Peak: ${fmtHour(peaks[0])} to ${fmtHour(peaks[peaks.length - 1] + 1)}. `
-            : ''}
-          {highEffort.length
-            ? `${inPeak} of ${highEffort.length} high-effort tasks start in your peak.`
-            : 'No high-effort tasks yet.'}
-        </Text>
       </Card>
 
       <Label>Timeline</Label>
@@ -150,7 +120,7 @@ export function PlanScreen() {
 
       {loose.length ? (
         <>
-          <Label>Needs room</Label>
+          <Label>Needs a time</Label>
           <View style={styles.list}>
             {loose.map((task) => (
               <TaskRow key={task.id} task={task} withTime />
@@ -163,7 +133,7 @@ export function PlanScreen() {
                 { color: colors.muted, fontFamily: fonts.regular, flex: 1 },
               ]}
             >
-              These do not fit your open hours.
+              These tasks are not scheduled in today&apos;s open hours.
             </Text>
             {day === 'today' ? (
               <Button
@@ -173,6 +143,19 @@ export function PlanScreen() {
                 onPress={moveLoose}
               />
             ) : null}
+
+            <Label>Energy guidance</Label>
+            <Card>
+              <EnergyStrip />
+              <Text style={[type.hint, { color: colors.muted, marginTop: 8, fontFamily: fonts.regular }]}>
+                {peaks.length
+                  ? `Peak: ${fmtHour(peaks[0])} to ${fmtHour(peaks[peaks.length - 1] + 1)}. `
+                  : ''}
+                {highEffort.length
+                  ? `${inPeak} of ${highEffort.length} high-effort tasks start in your peak.`
+                  : 'No high-effort tasks yet.'}
+              </Text>
+            </Card>
           </View>
         </>
       ) : null}

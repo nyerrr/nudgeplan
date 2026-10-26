@@ -68,7 +68,6 @@ const PHASES = [
 const TEAM = [
   ['RB', 'Ranier J. Burlasa', 'Back-end developer'],
   ['LR', 'Laurien Aemanuel Reyes', 'Front-end developer'],
-  ['DO', 'Dave Nathaniel Olazo', 'QA, Lead Documenter'],
 ];
 
 export function AboutScreen() {

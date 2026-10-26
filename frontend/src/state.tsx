@@ -109,6 +109,7 @@ interface AppContextValue {
   aiStatus: AiStatus;
   aiInfo: Awaited<ReturnType<typeof checkBackend>>;
   exportData: () => string;
+  resetPreferences: () => void;
   resetApp: () => Promise<void>;
   testNudge: () => Promise<void>;
   storageWarning: boolean;
@@ -869,6 +870,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setStorageWarning(false);
   }, [updateTimer]);
 
+  const resetPreferences = useCallback(() => {
+    const current = stateRef.current;
+    commit({
+      ...current,
+      startH: 9,
+      endH: 18,
+      energy: 'medium',
+      nudges: true,
+      nudgeLeadMin: 15,
+      theme: 'light',
+    });
+    notify('Preferences reset.');
+  }, [commit, notify]);
+
   const timerTaskTitle = useCallback(() => {
     const current = stateRef.current;
     return (
@@ -977,6 +992,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       aiInfo,
       exportData,
       resetApp,
+      resetPreferences,
       testNudge,
       storageWarning,
       lastNudge,
@@ -1026,6 +1042,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       aiInfo,
       exportData,
       resetApp,
+      resetPreferences,
       testNudge,
       storageWarning,
       lastNudge,

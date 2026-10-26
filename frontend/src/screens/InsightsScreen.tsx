@@ -54,8 +54,24 @@ export function InsightsScreen() {
         Your actual progress over the last 7 days.
       </Text>
 
+      <Card style={styles.takeaway}>
+        <Text style={[styles.takeawayK, { color: colors.brand }]}>A QUICK READ</Text>
+        <Text style={[styles.takeawayTitle, { color: colors.ink }]}>
+          {today.length === 0
+            ? 'Your plan is ready for its first signal.'
+            : rate >= 70
+              ? 'You are keeping a steady pace today.'
+              : 'A smaller plan may help you finish more consistently.'}
+        </Text>
+        <Text style={[styles.takeawayBody, { color: colors.muted }]}>
+          {today.length === 0
+            ? 'Check in and complete a few small steps. NudgePlan will learn from what actually happens.'
+            : 'Use these patterns as guidance, not a score. Adjust your workload when your energy changes.'}
+        </Text>
+      </Card>
+
       <View style={styles.tiles}>
-        {tiles.map((tile) => (
+        {tiles.slice(0, 2).map((tile) => (
           <Card key={tile.label} style={styles.tile}>
             <Text
               style={{
@@ -80,6 +96,12 @@ export function InsightsScreen() {
             </Text>
           </Card>
         ))}
+      </View>
+      <View style={styles.secondarySummary}>
+        <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12.5 }}>
+          {steps} small {steps === 1 ? 'step' : 'steps'} finished · {streak} day
+          {streak === 1 ? '' : 's'} of check-ins
+        </Text>
       </View>
 
       <Label>Completion by day</Label>
@@ -175,7 +197,7 @@ export function InsightsScreen() {
           ))
         ) : (
           <Empty style={{ paddingVertical: 18 }}>
-            No reality checks yet. Move a task and it will show up here.
+            No reality checks yet. Check in, move a task, or adjust your plan to start building a useful history.
           </Empty>
         )}
       </Card>
@@ -194,6 +216,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
     marginTop: 16,
+  },
+  secondarySummary: {
+    alignItems: 'center',
+    marginTop: 8,
   },
   tile: {
     width: '48%',
@@ -222,5 +248,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
+  },
+  takeaway: {
+    marginTop: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3F8EFC',
+  },
+  takeawayK: {
+    fontFamily: fonts.bold,
+    fontSize: 10.5,
+    letterSpacing: 1,
+  },
+  takeawayTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 17,
+    lineHeight: 22,
+    marginTop: 8,
+  },
+  takeawayBody: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 5,
   },
 });

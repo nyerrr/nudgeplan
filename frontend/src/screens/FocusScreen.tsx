@@ -35,10 +35,12 @@ export function FocusScreen() {
     addStep,
     breakIntoSteps,
     notify,
+    go,
   } = useApp();
   const [stepText, setStepText] = useState('');
   const [breaking, setBreaking] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [showSteps, setShowSteps] = useState(false);
 
   const candidates = sortedTasks(state.tasks, 'today').filter(
     (task) => !task.done,
@@ -332,7 +334,7 @@ export function FocusScreen() {
 
           {selected.steps.length && currentStep ? (
             <>
-              <Card style={[styles.timerCard, { marginTop: 12 }]}>
+              <Card style={[styles.timerCard, { marginTop: 12, borderColor: colors.brand, borderWidth: 1.5 }]}>
                 <Text
                   style={[
                     type.sub,
@@ -403,10 +405,30 @@ export function FocusScreen() {
                     onPress={() => makeSmaller(selected.id)}
                   />
                 </View>
+                <Button
+                  small
+                  ghost
+                  label="Done for now"
+                  onPress={() => {
+                    notify('Focus session paused. Your progress is saved.');
+                    go('home');
+                  }}
+                  style={{ alignSelf: 'center', marginTop: 12 }}
+                />
               </Card>
 
-              <Label>Steps</Label>
-              <View style={styles.steps}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showSteps }}
+                onPress={() => setShowSteps((value) => !value)}
+                style={styles.stepsToggle}
+              >
+                <Text style={{ color: colors.muted, fontFamily: fonts.semibold, fontSize: 13 }}>
+                  {showSteps ? 'Hide all steps' : `View all steps (${selected.steps.length})`}
+                </Text>
+                <Icon name={showSteps ? 'chevron-up' : 'chevron-down'} size={15} color={colors.brand} />
+              </Pressable>
+              {showSteps ? <View style={styles.steps}>
                 {selected.steps.map((step) => {
                   const current = step.id === currentStep.id;
                   return (
@@ -470,7 +492,7 @@ export function FocusScreen() {
                     </View>
                   );
                 })}
-              </View>
+              </View> : null}
 
               <View style={styles.addRow}>
                 <TextInput
@@ -549,6 +571,14 @@ const styles = StyleSheet.create({
   },
   pickerOptions: {
     gap: 8,
+  },
+  stepsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 18,
+    marginBottom: 8,
+    paddingVertical: 4,
   },
   pickerOption: {
     flexDirection: 'row',

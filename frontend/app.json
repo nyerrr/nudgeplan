@@ -7,13 +7,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.nudgeplan.app"
+      "supportsTablet": true
     },
     "android": {
-      "package": "com.nudgeplan.app",
       "adaptiveIcon": {
-        "backgroundColor": "#0B0D12",
+        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

@@ -27,6 +27,22 @@ export function CheckInScreen() {
     moveN,
   } = useApp();
   const [text, setText] = useState('');
+  const [showExamples, setShowExamples] = useState(false);
+  const hasConversation = state.chat.length > 0;
+  const examples = [
+    {
+      title: 'Plan my workday',
+      prompt: 'Finish the quarterly report 2h, call the dentist, reply to Sam\'s email, gym at 6pm',
+    },
+    {
+      title: 'I’m tired today',
+      prompt: "I'm tired today. Study for the chem exam 90m, laundry",
+    },
+    {
+      title: 'I’m feeling stuck',
+      prompt: "I'm stuck on the budget spreadsheet",
+    },
+  ];
   const { listening, start, supported } = useVoiceInput({
     onTranscript: (value) => {
       setText((current) => (current.trim() ? `${current} ${value}` : value));
@@ -62,6 +78,9 @@ export function CheckInScreen() {
 
   const renderMessage = (message: ChatMessage) => {
     const mine = message.from === 'me';
+    const scheduledTasks =
+      message.tasks?.filter((task) => task.when !== 'Needs room').length ?? 0;
+    const unscheduledTasks = (message.tasks?.length ?? 0) - scheduledTasks;
     return (
       <View
         key={message.id}
@@ -96,6 +115,23 @@ export function CheckInScreen() {
 
         {message.tasks?.length ? (
           <View style={styles.added}>
+            <View style={styles.addedSummary}>
+              <Text
+                style={{
+                  color: colors.ink,
+                  fontFamily: fonts.semibold,
+                  fontSize: 13,
+                  flex: 1,
+                }}
+              >
+                {message.tasks.length} {message.tasks.length === 1 ? 'task' : 'tasks'} found
+              </Text>
+              {unscheduledTasks ? (
+                <Text style={{ color: colors.muted, fontFamily: fonts.medium, fontSize: 12 }}>
+                  {unscheduledTasks} need a time
+                </Text>
+              ) : null}
+            </View>
             {message.tasks.map((task, index) => (
               <View
                 key={`${task.title}-${index}`}
@@ -121,7 +157,7 @@ export function CheckInScreen() {
                     fontSize: 12.5,
                   }}
                 >
-                  {task.when}
+                  {task.when === 'Needs room' ? 'Not scheduled' : task.when}
                 </Text>
               </View>
             ))}
@@ -152,46 +188,14 @@ export function CheckInScreen() {
       keyboardVerticalOffset={8}
     >
       <View style={styles.header}>
-        <Text style={[type.title, { color: colors.ink }]}>Check-in</Text>
-        <Text style={[type.sub, { color: colors.muted, marginTop: 2 }]}>
-          Type or speak. I will sort it into your day.
+        <Text style={[type.title, { color: colors.ink }]}>
+          {hasConversation ? 'Check-in' : 'What’s on your mind?'}
         </Text>
-      </View>
-
-      <View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
-          keyboardShouldPersistTaps="handled"
-        >
-          {[
-            'Finish the quarterly report 2h, call the dentist, reply to Sam\'s email, gym at 6pm',
-            "I'm tired today. Study for the chem exam 90m, laundry",
-            'Tomorrow: write the essay intro, buy groceries',
-            "I'm stuck on the budget spreadsheet",
-          ].map((chip) => (
-            <Pressable
-              key={chip}
-              accessibilityRole="button"
-              onPress={() => void sendCheckIn(chip)}
-              style={[
-                styles.chip,
-                { backgroundColor: colors.surface, borderColor: colors.line },
-              ]}
-            >
-              <Text
-                style={{
-                  color: colors.ink,
-                  fontFamily: fonts.regular,
-                  fontSize: 12.5,
-                }}
-              >
-                {chip.length > 34 ? `${chip.slice(0, 32)}...` : chip}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+        <Text style={[type.sub, { color: colors.muted, marginTop: 2 }]}>
+          {hasConversation
+            ? 'Add anything new and I’ll help shape it into your day.'
+            : 'Brain dump anything. I’ll help make it manageable.'}
+        </Text>
       </View>
 
       <ScrollView
@@ -202,6 +206,31 @@ export function CheckInScreen() {
         accessibilityLiveRegion="polite"
         showsVerticalScrollIndicator={false}
       >
+        {!hasConversation ? (
+          <View style={styles.emptyIntro}>
+            <Text style={[styles.emptyIntroTitle, { color: colors.ink }]}>
+              Tell me what you need to do, how you feel, or what feels difficult.
+            </Text>
+            <Text style={[styles.emptyIntroBody, { color: colors.muted }]}>
+              I’ll sort it into a realistic plan without asking you to organize it first.
+            </Text>
+            <View style={styles.quickExamples}>
+              {examples.map((example) => (
+                <Pressable
+                  key={example.title}
+                  accessibilityRole="button"
+                  accessibilityLabel={example.title}
+                  onPress={() => void sendCheckIn(example.prompt)}
+                  style={[styles.quickExample, { backgroundColor: colors.surface, borderColor: colors.line }]}
+                >
+                  <Text style={{ color: colors.ink, fontFamily: fonts.medium, fontSize: 12.5 }}>
+                    {example.title}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
         {state.chat.map(renderMessage)}
         {typing ? (
           <View
@@ -229,6 +258,40 @@ export function CheckInScreen() {
       </ScrollView>
 
       <View style={[styles.chatbar, { backgroundColor: colors.bg }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showExamples }}
+          accessibilityLabel={showExamples ? 'Hide examples' : 'Show examples'}
+          onPress={() => setShowExamples((value) => !value)}
+          style={styles.examplesToggle}
+        >
+          <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12 }}>
+            Need inspiration?
+          </Text>
+          <View style={styles.examplesToggleAction}>
+            <Text style={{ color: colors.brand, fontFamily: fonts.semibold, fontSize: 12 }}>
+              {showExamples ? 'Hide examples' : 'Show examples'}
+            </Text>
+            <Icon name={showExamples ? 'chevron-up' : 'chevron-down'} size={14} color={colors.brand} />
+          </View>
+        </Pressable>
+        {showExamples ? (
+          <View style={styles.compactExamples}>
+            {examples.map((example) => (
+              <Pressable
+                key={example.title}
+                accessibilityRole="button"
+                accessibilityLabel={example.title}
+                onPress={() => void sendCheckIn(example.prompt)}
+                style={[styles.compactExample, { backgroundColor: colors.surface, borderColor: colors.line }]}
+              >
+                <Text style={{ color: colors.ink, fontFamily: fonts.medium, fontSize: 12 }}>
+                  {example.title}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
         <View
           style={[
             styles.askbar,
@@ -288,17 +351,65 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingBottom: 8,
   },
-  chips: {
-    gap: 8,
+  examplesToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 18,
-    paddingTop: 6,
-    paddingBottom: 10,
+    paddingVertical: 9,
   },
-  chip: {
+  examplesToggleAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  emptyIntro: {
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 28,
+  },
+  emptyIntroTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 18,
+    lineHeight: 24,
+    textAlign: 'center',
+    maxWidth: 310,
+  },
+  emptyIntroBody: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    maxWidth: 300,
+    marginTop: 8,
+  },
+  quickExamples: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 18,
+  },
+  quickExample: {
     borderWidth: 1,
-    borderRadius: 99,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  compactExamples: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingHorizontal: 4,
+    paddingBottom: 8,
+  },
+  compactExample: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 999,
     paddingVertical: 7,
-    paddingHorizontal: 13,
+    paddingHorizontal: 12,
   },
   chat: {
     paddingTop: 8,
@@ -315,6 +426,12 @@ const styles = StyleSheet.create({
   },
   added: {
     gap: 4,
+  },
+  addedSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 3,
   },
   addedRow: {
     flexDirection: 'row',
