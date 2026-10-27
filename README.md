@@ -21,11 +21,16 @@ shared by the backend and the mobile client.
 | **Focus** | Task picker, Micro-Step Guard breakdown, countdown timer, step checklists, "make it smaller" |
 | **Insights** | Completion history, capacity, micro-step count, check-in streak, recent reality checks |
 | **Profile** | Name, working hours, nudges, auto/light/dark theme, prototype demos, reset |
-| **Sign-in** | Google/email preview login with guest skip, persisted session, and sign-out from Profile. Provider wiring is stubbed until Supabase is connected. |
+| **Sign-in** | Real Supabase Google/email sign-in with guest skip, persisted session, and sign-out from Profile |
 | **About** | Product story, problem/solution, audience, roadmap, and team |
 
-The current prototype keeps its plan in memory. Persistence and notifications
-are intentionally deferred until the storage model is settled.
+The current prototype keeps its plan in on-device storage, scoped to the
+signed-in user. Cross-device sync is not implemented yet.
+
+## Deployment
+
+See [DEPLOY.md](DEPLOY.md) for the Render backend, the Supabase redirect
+setup, and building a shareable APK with EAS.
 
 ## Architecture
 

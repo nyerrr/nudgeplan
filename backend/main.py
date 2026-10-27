@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+import auth as supabase_auth
 import planner
 
 load_dotenv()
@@ -43,35 +44,77 @@ configured_origins = [
 ]
 api_auth_token = os.getenv("API_AUTH_TOKEN", "").strip()
 
+# Only the AI endpoints cost money, so only they are gated. `/` and `/health`
+# stay public so uptime checks and the in-app status badge keep working.
+PROTECTED_PREFIXES = ("/ai/",)
+
+
+async def _authenticate(request: Request) -> JSONResponse | None:
+    """Return a 401 response when the caller may not use the AI endpoints."""
+    if api_auth_token:
+        supplied = request.headers.get("x-api-key", "")
+        if not secrets.compare_digest(supplied, api_auth_token):
+            return JSONResponse(
+                {"detail": "Authentication required"}, status_code=401
+            )
+        return None
+
+    if not supabase_auth.auth_enabled():
+        # Local development without Supabase, or AUTH_REQUIRED=false.
+        return None
+
+    token = supabase_auth.bearer_token(request.headers.get("authorization"))
+    if not token:
+        return JSONResponse(
+            {"detail": "Sign in to use AI planning."},
+            status_code=401,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user_id, error = await supabase_auth.user_id_for_token(token)
+    if error or not user_id:
+        return JSONResponse(
+            {"detail": error or "Your session is not valid."},
+            status_code=401,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    request.state.user_id = user_id
+    return None
+
+
+def _with_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.method != "OPTIONS" and request.url.path.startswith(
+            PROTECTED_PREFIXES
+        ):
+            rejection = await _authenticate(request)
+            if rejection is not None:
+                return _with_security_headers(rejection)
+
+        response = await call_next(request)
+        return _with_security_headers(response)
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+# Added last so it is the outermost layer: a 401 from the auth check still
+# carries CORS headers, which a browser needs in order to read the response.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=configured_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-API-Key"],
+    allow_headers=["Content-Type", "X-API-Key", "Authorization"],
 )
-
-
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        if (
-            api_auth_token
-            and request.method != "OPTIONS"
-            and request.url.path not in {"/", "/health"}
-        ):
-            supplied = request.headers.get("x-api-key", "")
-            if not secrets.compare_digest(supplied, api_auth_token):
-                return JSONResponse({"detail": "Authentication required"}, status_code=401)
-
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["Cache-Control"] = "no-store"
-        return response
-
-
-app.add_middleware(SecurityHeadersMiddleware)
 
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key) if api_key else None
@@ -116,6 +159,7 @@ Priority = Literal["low", "medium", "high"]
 
 ALLOWED_LEVELS = {"low", "medium", "high"}
 MAX_TASKS = 8
+MAX_STEPS = 4
 MIN_MINUTES = 5
 MAX_MINUTES = 480
 
@@ -174,6 +218,27 @@ class PlanResponse(BaseModel):
     model: str | None = None
 
 
+class StepsRequest(BaseModel):
+    title: str = Field(
+        ..., min_length=1, max_length=400, description="The task to break down."
+    )
+    effort: str = Field(
+        "med", pattern="^(low|med|high)$", description="How heavy the task feels."
+    )
+
+
+class PlannedStep(BaseModel):
+    text: str
+    min: int = Field(5, ge=2, le=30)
+
+
+class StepsResponse(BaseModel):
+    steps: list[PlannedStep]
+    raw: str = ""
+    model: str | None = None
+    source: Literal["gemini", "offline"] = "offline"
+
+
 @app.get("/")
 def root():
     return {
@@ -228,6 +293,100 @@ async def plan_tasks(req: PlanRequest):
         raw=raw,
         model=used_model,
     )
+
+
+STEPS_PROMPT_TEMPLATE = """You are the NudgePlan Micro-Step Guard. The user is \
+stuck on this task:
+
+"{title}"
+
+Break it into 3 to 4 micro-steps. Rules:
+
+- The FIRST step must be doable in under 10 minutes and must not require \
+making a decision.
+- Each step is one physical action ("Open the document and title it"), never a \
+project ("research the topic").
+- The task feels {effort} effort to the user, so scale the steps accordingly.
+- "min" is a realistic estimate between 2 and 30 minutes for that single step.
+- Do not add encouragement, headings, or commentary.
+
+Return STRICT JSON and nothing else, matching exactly this shape:
+
+{{"steps": [{{"text": "...", "min": 5}}, {{"text": "...", "min": 10}}]}}
+"""
+
+
+def build_steps_prompt(title: str, effort: str) -> str:
+    return STEPS_PROMPT_TEMPLATE.format(title=title, effort=effort)
+
+
+def _offline_steps(title: str) -> list[PlannedStep]:
+    return [
+        PlannedStep(text=_clean_text(step, 160) or "Start with the smallest move.", min=5)
+        for step in planner.make_steps(title)
+    ]
+
+
+def _normalise_steps(value: object) -> list[PlannedStep]:
+    """Accept a list of strings, dicts, or a mixed bag and keep it usable."""
+    if not isinstance(value, list):
+        return []
+
+    steps: list[PlannedStep] = []
+    for entry in value:
+        text = ""
+        minutes = 5
+        if isinstance(entry, str):
+            text = entry
+        elif isinstance(entry, dict):
+            text = _clean_text(entry.get("text") or entry.get("step"), 160)
+            try:
+                minutes = int(entry.get("min", 5))
+            except (TypeError, ValueError):
+                minutes = 5
+        if not text:
+            continue
+        steps.append(PlannedStep(text=text, min=max(2, min(30, minutes))))
+        if len(steps) == MAX_STEPS:
+            break
+    return steps
+
+
+@app.post("/ai/steps", response_model=StepsResponse)
+async def plan_steps(req: StepsRequest):
+    title = _clean_text(req.title, 400)
+    if not title:
+        raise HTTPException(status_code=400, detail="A task title is required.")
+
+    fallback = _offline_steps(title)
+
+    if MOCK or not HAS_REAL_KEY:
+        return StepsResponse(
+            steps=fallback,
+            raw="(offline planner - no Gemini API call made)",
+            model="offline-planner",
+            source="offline",
+        )
+
+    raw, used_model, errors = _generate_with_fallback(
+        build_steps_prompt(title, req.effort)
+    )
+    if raw is None:
+        # Degrading beats failing here: the user still gets usable steps.
+        return StepsResponse(
+            steps=fallback, raw="; ".join(errors), source="offline"
+        )
+
+    steps = _normalise_steps(_parse_json(raw).get("steps"))
+    if not steps:
+        return StepsResponse(
+            steps=fallback,
+            raw=raw,
+            model=used_model,
+            source="offline",
+        )
+
+    return StepsResponse(steps=steps, raw=raw, model=used_model, source="gemini")
 
 
 PROMPT_TEMPLATE = """You are the NudgePlan planning assistant. The user dumped \
