@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { AppState as NativeAppState, useColorScheme } from 'react-native';
 
+import { useAuth } from './auth';
 import { checkBackend, requestCheckIn, requestSteps } from './lib/api';
 import {
   applyCheckIn,
@@ -133,6 +134,7 @@ const EMPTY_TIMER: TimerState = {
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
+  const { user, hydrated: authHydrated } = useAuth();
   const [state, setState] = useState<AppState>(() => initialState());
   const [hydrated, setHydrated] = useState(false);
   const [screen, setScreen] = useState<Screen>('home');
@@ -157,10 +159,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nudgeKeyRef = useRef('');
 
-  // Load persisted state once, then roll the plan into the current day.
+  const userId = user?.id ?? null;
+  const userIdRef = useRef<string | null>(userId);
+  userIdRef.current = userId;
+
+  // Load the plan that belongs to the signed-in account. `loadedFor` records
+  // which account the in-memory state came from, so a sign-out/sign-in swap
+  // can never write one user's plan into another user's key.
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const loadedForRef = useRef<string | null>(loadedFor);
+  loadedForRef.current = loadedFor;
+
   useEffect(() => {
+    if (!authHydrated) return;
     let active = true;
-    loadState()
+
+    if (!userId) {
+      setState(initialState());
+      setLoadedFor(null);
+      setHydrated(true);
+      return;
+    }
+
+    setHydrated(false);
+    loadState(userId)
       .then((saved) => {
         if (!active) return;
         if (saved) {
@@ -173,23 +195,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 : [welcomeMessage(current.name)],
             }),
           );
+        } else {
+          setState(initialState());
         }
+        setLoadedFor(userId);
         setHydrated(true);
       })
       .catch(() => {
-        if (active) setHydrated(true);
+        if (!active) return;
+        setLoadedFor(userId);
+        setHydrated(true);
       });
+
     return () => {
       active = false;
     };
-  }, []);
+  }, [authHydrated, userId]);
 
   // Persist every meaningful change after hydration, with a tiny debounce.
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !userId || loadedFor !== userId) return;
     let active = true;
     const id = setTimeout(() => {
-      void saveState(state).then((ok) => {
+      void saveState(state, userId).then((ok) => {
         if (!active) return;
         if (ok) setStorageWarning(false);
         else setStorageWarning(true);
@@ -199,13 +227,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       active = false;
       clearTimeout(id);
     };
-  }, [state, hydrated]);
+  }, [state, hydrated, userId, loadedFor]);
 
   // Save immediately when the app is backgrounded.
   useEffect(() => {
     const subscription = NativeAppState.addEventListener('change', (next) => {
       if (next === 'background' || next === 'inactive') {
-        if (hydrated) void saveState(stateRef.current);
+        const owner = userIdRef.current;
+        if (hydrated && owner && loadedForRef.current === owner) {
+          void saveState(stateRef.current, owner);
+        }
       }
       if (next === 'active') {
         setTimer((current) => {
@@ -860,7 +891,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const resetApp = useCallback(async () => {
     await cancelTaskNudges();
     await cancelTimerNotification();
-    await clearState();
+    await clearState(userIdRef.current);
     nudgeKeyRef.current = '';
     setState(initialState());
     updateTimer(EMPTY_TIMER);

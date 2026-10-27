@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
 });
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Poppins_300Light,
     Poppins_400Regular,
     Poppins_500Medium,
@@ -133,17 +133,19 @@ export default function App() {
     Poppins_800ExtraBold,
   });
 
-  if (!fontsLoaded) {
+  // A font failure used to leave the app on the splash-coloured blank screen
+  // forever. Render with fallback fonts instead.
+  if (!fontsLoaded && !fontError) {
     return <View style={{ flex: 1, backgroundColor: '#D6EDFF' }} />;
   }
 
   return (
     <SafeAreaProvider>
-      <AppProvider>
-        <AuthProvider>
+      <AuthProvider>
+        <AppProvider>
           <Root />
-        </AuthProvider>
-      </AppProvider>
+        </AppProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

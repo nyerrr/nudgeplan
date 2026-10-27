@@ -2,12 +2,17 @@
   "expo": {
     "name": "NudgePlan",
     "slug": "nudgeplan",
+    "scheme": "nudgeplan",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -35,7 +40,8 @@
           "icon": "./assets/icon.png",
           "color": "#000A73"
         }
-      ]
+      ],
+      "expo-web-browser"
     ]
   }
 }

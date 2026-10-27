@@ -29,6 +29,8 @@ export function LoginScreen() {
     completeEmailSignIn,
     continueAsGuest,
     demoMode,
+    authError,
+    clearAuthError,
   } = useAuth();
   const [step, setStep] = useState<Step>('choose');
   const [email, setEmail] = useState('');
@@ -38,11 +40,16 @@ export function LoginScreen() {
 
   const handleGoogle = async () => {
     setError(null);
+    clearAuthError();
     setWorking('google');
     try {
       await signInWithGoogle();
-    } catch {
-      setError('Google sign-in could not start. Please try again.');
+    } catch (reason) {
+      setError(
+        reason instanceof Error && reason.message
+          ? reason.message
+          : 'Google sign-in could not start. Please try again.',
+      );
       setWorking(null);
     }
   };
@@ -57,8 +64,12 @@ export function LoginScreen() {
     try {
       await sendEmailLink(email);
       setStep('sent');
-    } catch {
-      setError('The sign-in link could not be sent. Please try again.');
+    } catch (reason) {
+      setError(
+        reason instanceof Error && reason.message
+          ? reason.message
+          : 'The sign-in link could not be sent. Please try again.',
+      );
     } finally {
       setWorking(null);
     }
@@ -347,9 +358,9 @@ export function LoginScreen() {
 
             {step === 'choose' ? (
               <>
-                {error ? (
+                {error ?? authError ? (
                   <Text style={[styles.error, { color: colors.warn }]}>
-                    {error}
+                    {error ?? authError}
                   </Text>
                 ) : null}
                 <Pressable

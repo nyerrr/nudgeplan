@@ -3,8 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initialState, todayIso } from './engine';
 import type { AppState, Task } from '../types';
 
-const KEY = 'nudgeplan-app-2';
+const BASE_KEY = 'nudgeplan-app-2';
 const LEGACY_KEY = 'nudgeplan-app-1';
+const GUEST_ID = 'guest-local';
 
 const DEMO_TITLES = [
   'Deep work: research',
@@ -93,12 +94,35 @@ function normalise(raw: Record<string, unknown>): AppState | null {
   } as AppState;
 }
 
-export async function loadState(): Promise<AppState | null> {
+/** Plans are scoped per account so signing in as someone else starts clean. */
+function keyFor(userId?: string | null): string {
+  return `${BASE_KEY}-${userId || GUEST_ID}`;
+}
+
+export async function loadState(userId?: string | null): Promise<AppState | null> {
+  const key = keyFor(userId);
   try {
-    const current = await AsyncStorage.getItem(KEY);
+    const current = await AsyncStorage.getItem(key);
     if (current) {
       const parsed = JSON.parse(current) as Record<string, unknown>;
       if (parsed?.v === 2) return normalise(parsed);
+    }
+
+    // Adopt the pre-accounts single-user blob once, so the first sign-in keeps
+    // the plan that was already on this device.
+    if (key !== BASE_KEY) {
+      const unowned = await AsyncStorage.getItem(BASE_KEY);
+      if (unowned) {
+        const parsed = JSON.parse(unowned) as Record<string, unknown>;
+        if (parsed?.v === 2) {
+          const adopted = normalise(parsed);
+          if (adopted) {
+            await AsyncStorage.setItem(key, JSON.stringify(adopted));
+            await AsyncStorage.removeItem(BASE_KEY);
+            return adopted;
+          }
+        }
+      }
     }
 
     const legacy = await AsyncStorage.getItem(LEGACY_KEY);
@@ -113,7 +137,7 @@ export async function loadState(): Promise<AppState | null> {
     }
     const migrated = normalise(parsed);
     if (migrated) {
-      await AsyncStorage.setItem(KEY, JSON.stringify(migrated));
+      await AsyncStorage.setItem(key, JSON.stringify(migrated));
       await AsyncStorage.removeItem(LEGACY_KEY);
     }
     return migrated;
@@ -123,9 +147,12 @@ export async function loadState(): Promise<AppState | null> {
   }
 }
 
-export async function saveState(state: AppState): Promise<boolean> {
+export async function saveState(
+  state: AppState,
+  userId?: string | null,
+): Promise<boolean> {
   try {
-    await AsyncStorage.setItem(KEY, JSON.stringify(state));
+    await AsyncStorage.setItem(keyFor(userId), JSON.stringify(state));
     return true;
   } catch {
     // Storage is best effort. The app keeps working in memory.
@@ -133,9 +160,9 @@ export async function saveState(state: AppState): Promise<boolean> {
   }
 }
 
-export async function clearState(): Promise<void> {
+export async function clearState(userId?: string | null): Promise<void> {
   try {
-    await AsyncStorage.multiRemove([KEY, LEGACY_KEY]);
+    await AsyncStorage.multiRemove([keyFor(userId), LEGACY_KEY]);
   } catch {
     // Nothing else to do; the caller resets the in-memory state.
   }
