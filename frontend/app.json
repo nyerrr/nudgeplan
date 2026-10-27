@@ -18,7 +18,7 @@
       "package": "com.rainier.nudgeplan",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#000B77",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -33,17 +33,31 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font",
+            "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#000B77"
+        }
+      ],
       "expo-speech-recognition",
       "expo-sharing",
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
-          "color": "#000A73"
+          "icon": "./assets/notification-icon.png",
+          "color": "#000B77"
         }
       ],
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ed68f680-ea6c-4d7d-8d6f-2d22803cae03"
+      }
+    }
   }
 }
