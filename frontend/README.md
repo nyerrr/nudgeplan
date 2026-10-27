@@ -73,7 +73,7 @@ Your phone and PC must be on the same WiFi. Set your PC's LAN IP in
 `frontend/.env`:
 
 ```
-EXPO_PUBLIC_API_URL=http://192.168.x.x:8001
+process.env.EXPO_PUBLIC_API_URL
 ```
 
 Find your LAN IP with `ipconfig` (look for IPv4 Address).

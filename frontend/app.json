@@ -15,7 +15,7 @@
       }
     },
     "android": {
-      "package": "com.nudgeplan.app",
+      "package": "com.rainier.nudgeplan",
       "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
