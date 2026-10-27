@@ -12,8 +12,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://nudgeplan.onrender.com",
         "EXPO_PUBLIC_SUPABASE_URL": "https://axrdwlugtuirpbswiefz.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cmR3bHVndHVpcnBic3dpZWZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwNTI4OTEsImV4cCI6MjEwODYyODg5MX0.Dae0ZfDPinqgf5VyWY_KT97y3RdRo7smmXoFW6Yfiio",
-        "EXPO_PUBLIC_API_KEY": ""
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cmR3bHVndHVpcnBic3dpZWZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwNTI4OTEsImV4cCI6MjEwODYyODg5MX0.Dae0ZfDPinqgf5VyWY_KT97y3RdRo7smmXoFW6Yfiio"
+        
       }
     },
     "production": {
@@ -23,8 +23,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://nudgeplan-api.onrender.com",
         "EXPO_PUBLIC_SUPABASE_URL": "https://axrdwlugtuirpbswiefz.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cmR3bHVndHVpcnBic3dpZWZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwNTI4OTEsImV4cCI6MjEwODYyODg5MX0.Dae0ZfDPinqgf5VyWY_KT97y3RdRo7smmXoFW6Yfiio",
-        "EXPO_PUBLIC_API_KEY": ""
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cmR3bHVndHVpcnBic3dpZWZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwNTI4OTEsImV4cCI6MjEwODYyODg5MX0.Dae0ZfDPinqgf5VyWY_KT97y3RdRo7smmXoFW6Yfiio"
+        
       }
     }
   }
