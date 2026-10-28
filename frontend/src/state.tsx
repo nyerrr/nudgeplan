@@ -187,9 +187,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!active) return;
         if (saved) {
           const { state: current } = rollover(saved);
+          // Re-anchor today's unfinished work to the current clock time, so a
+          // plan opened at 3pm does not keep showing 9am slots.
+          const planned = planTasks(
+            current.tasks,
+            current.startH,
+            current.endH,
+            current.energy,
+          );
           setState(
             syncDaily({
               ...current,
+              tasks: planned,
               chat: current.chat.length
                 ? current.chat
                 : [welcomeMessage(current.name)],
@@ -525,7 +534,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 effort: draft.effort,
                 day: draft.day,
                 pri: draft.pri,
-                start: fixed ? draft.start : null,
+                start: fixed
+                  ? draft.start
+                  : task.done
+                    ? task.start
+                    : null,
                 fixed,
               }
             : task,

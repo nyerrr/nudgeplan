@@ -5,13 +5,13 @@ import { EnergyStrip } from '../components/EnergyStrip';
 import { Button, Card, Empty, Label, Meter, Segmented } from '../components/ui';
 import { TaskRow } from '../components/TaskRow';
 import {
-  availableMinutes,
+  availableMinutesFor,
   capacityPercent,
   dayLabel,
   fmtDuration,
   fmtHour,
   isPeak,
-  peakHours,
+  peakHoursFor,
   plannedMinutes,
   sortedTasks,
 } from '../lib/engine';
@@ -27,11 +27,16 @@ export function PlanScreen() {
   const loose = list.filter((task) => task.start == null);
   const percent = capacityPercent(state, day);
   const planned = plannedMinutes(state.tasks, day);
-  const available = availableMinutes(state.startH, state.endH, state.energy);
-  const peaks = peakHours(state.startH, state.endH, state.energy);
+  const available = availableMinutesFor(
+    day,
+    state.startH,
+    state.endH,
+    state.energy,
+  );
+  const peaks = peakHoursFor(day, state.startH, state.endH, state.energy);
   const highEffort = placed.filter((task) => task.effort === 'high');
   const inPeak = highEffort.filter(
-    (task) => task.start != null && isPeak(task.start, state),
+    (task) => task.start != null && isPeak(task.start, state, day),
   ).length;
 
   return (
@@ -146,7 +151,7 @@ export function PlanScreen() {
 
             <Label>Energy guidance</Label>
             <Card>
-              <EnergyStrip />
+              <EnergyStrip day={day} />
               <Text style={[type.hint, { color: colors.muted, marginTop: 8, fontFamily: fonts.regular }]}>
                 {peaks.length
                   ? `Peak: ${fmtHour(peaks[0])} to ${fmtHour(peaks[peaks.length - 1] + 1)}. `

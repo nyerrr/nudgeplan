@@ -144,6 +144,11 @@ const GENERIC_STEPS: Array<[string, number]> = [
 
 export const DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240];
 
+/** Scheduling grid, in minutes. */
+const SLOT_MIN = 15;
+/** Runway kept when the saved end of day has already passed. */
+const EVENING_RUNWAY = 120;
+
 // ---------------------------------------------------------------------------
 // IDs, dates, labels
 // ---------------------------------------------------------------------------
@@ -461,12 +466,63 @@ export function remainingSeconds(timer: TimerState, now = Date.now()): number {
 // Capacity and energy
 // ---------------------------------------------------------------------------
 
+/** Minutes since midnight, rounded up to the next scheduling slot. */
+export function nowSlot(now: Date = new Date()): number {
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  return Math.min(24 * 60, Math.ceil(minutes / SLOT_MIN) * SLOT_MIN);
+}
+
+export interface SlotWindow {
+  from: number;
+  to: number;
+}
+
+/**
+ * The part of the day that is still open for work.
+ *
+ * Today starts at the current clock time, never at the saved "day starts"
+ * hour, so a plan made at 3pm does not put tasks at 9am. Tomorrow keeps the
+ * full configured window. If the saved end of day has already passed, a short
+ * evening runway is used so a late check-in still gets real times.
+ */
+export function slotWindow(
+  day: Day,
+  startH: number,
+  endH: number,
+  now: Date = new Date(),
+): SlotWindow {
+  const openFrom = startH * 60;
+  const openTo = endH * 60;
+  if (day !== 'today') return { from: openFrom, to: openTo };
+
+  const from = Math.max(openFrom, nowSlot(now));
+  if (from < openTo) return { from, to: openTo };
+
+  return {
+    from,
+    to: Math.min(24 * 60, Math.max(openTo, from + EVENING_RUNWAY)),
+  };
+}
+
+/** Open minutes in a window, after the energy factor. */
+export function availableMinutesFor(
+  day: Day,
+  startH: number,
+  endH: number,
+  energy: Energy,
+  now: Date = new Date(),
+): number {
+  const { from, to } = slotWindow(day, startH, endH, now);
+  return Math.max(15, Math.round((to - from) * ENERGY_FACTOR[energy]));
+}
+
 export function availableMinutes(
   startH: number,
   endH: number,
   energy: Energy,
+  now: Date = new Date(),
 ): number {
-  return Math.max(60, Math.round((endH - startH) * 60 * ENERGY_FACTOR[energy]));
+  return availableMinutesFor('today', startH, endH, energy, now);
 }
 
 export function energyAt(hour: number, energy: Energy): number {
@@ -482,15 +538,46 @@ export function hoursRange(startH: number, endH: number): number[] {
   return out;
 }
 
+/** Hours touched by a window expressed in minutes from midnight. */
+export function hoursForWindow(from: number, to: number): number[] {
+  const out: number[] = [];
+  for (let hour = Math.floor(from / 60); hour < Math.ceil(to / 60); hour += 1) {
+    if (hour < 0 || hour > 23) continue;
+    if ((hour + 1) * 60 <= from || hour * 60 >= to) continue;
+    out.push(hour);
+  }
+  return out;
+}
+
+export function peaksForWindow(
+  from: number,
+  to: number,
+  energy: Energy,
+): number[] {
+  const hours = hoursForWindow(from, to);
+  if (!hours.length) return [];
+  const max = Math.max(...hours.map((hour) => energyAt(hour, energy)));
+  return hours.filter((hour) => energyAt(hour, energy) >= 0.82 * max);
+}
+
+export function peakHoursFor(
+  day: Day,
+  startH: number,
+  endH: number,
+  energy: Energy,
+  now: Date = new Date(),
+): number[] {
+  const { from, to } = slotWindow(day, startH, endH, now);
+  return peaksForWindow(from, to, energy);
+}
+
 export function peakHours(
   startH: number,
   endH: number,
   energy: Energy,
+  now: Date = new Date(),
 ): number[] {
-  const hours = hoursRange(startH, endH);
-  if (!hours.length) return [];
-  const max = Math.max(...hours.map((hour) => energyAt(hour, energy)));
-  return hours.filter((hour) => energyAt(hour, energy) >= 0.82 * max);
+  return peakHoursFor('today', startH, endH, energy, now);
 }
 
 export function plannedMinutes(tasks: Task[], day: Day): number {
@@ -502,13 +589,17 @@ export function plannedMinutes(tasks: Task[], day: Day): number {
 export function capacityPercent(state: AppState, day: Day): number {
   return Math.round(
     (plannedMinutes(state.tasks, day) /
-      availableMinutes(state.startH, state.endH, state.energy)) *
+      availableMinutesFor(day, state.startH, state.endH, state.energy)) *
       100,
   );
 }
 
-export function isPeak(minutes: number, state: AppState): boolean {
-  return peakHours(state.startH, state.endH, state.energy).includes(
+export function isPeak(
+  minutes: number,
+  state: AppState,
+  day: Day = 'today',
+): boolean {
+  return peakHoursFor(day, state.startH, state.endH, state.energy).includes(
     Math.floor(minutes / 60),
   );
 }
@@ -520,15 +611,13 @@ export function isPeak(minutes: number, state: AppState): boolean {
 function findSlot(
   task: Task,
   busy: Array<[number, number]>,
-  startH: number,
-  endH: number,
+  from: number,
+  to: number,
   energy: Energy,
 ): number | null {
-  const from = startH * 60;
-  const to = endH * 60;
   const tries: number[] = [];
 
-  for (let minute = from; minute + task.dur <= to; minute += 15) {
+  for (let minute = from; minute + task.dur <= to; minute += SLOT_MIN) {
     const free = busy.every(
       ([busyStart, busyEnd]) =>
         minute + task.dur <= busyStart || minute >= busyEnd,
@@ -537,7 +626,7 @@ function findSlot(
   }
   if (!tries.length) return null;
 
-  const peaks = peakHours(startH, endH, energy);
+  const peaks = peaksForWindow(from, to, energy);
   if (task.effort === 'high') {
     const peakSlot = tries.find((minute) =>
       peaks.includes(Math.floor(minute / 60)),
@@ -558,16 +647,24 @@ export function planTasks(
   startH: number,
   endH: number,
   energy: Energy,
+  now: Date = new Date(),
 ): Task[] {
   const next = tasks.map((task) => ({ ...task }));
   (['today', 'tomorrow'] as Day[]).forEach((day) => {
+    const { from, to } = slotWindow(day, startH, endH, now);
     const dayTasks = next.filter((task) => task.day === day);
+
+    // Fixed appointments and finished work keep their time. Everything else is
+    // re-placed inside the hours that are still open from now on.
     const busy: Array<[number, number]> = dayTasks
-      .filter((task) => task.fixed && task.start != null)
-      .map((task) => [task.start as number, (task.start as number) + task.dur]);
+      .filter((task) => task.start != null && (task.fixed || task.done))
+      .map((task) => [
+        task.start as number,
+        (task.start as number) + task.dur,
+      ]);
 
     const auto = dayTasks
-      .filter((task) => !task.fixed)
+      .filter((task) => !task.fixed && !task.done)
       .sort(
         (a, b) =>
           EFFORT_RANK[b.effort] - EFFORT_RANK[a.effort] || b.pri - a.pri,
@@ -577,7 +674,7 @@ export function planTasks(
       task.start = null;
     });
     auto.forEach((task) => {
-      const slot = findSlot(task, busy, startH, endH, energy);
+      const slot = findSlot(task, busy, from, to, energy);
       if (slot != null) {
         task.start = slot;
         busy.push([slot, slot + task.dur]);

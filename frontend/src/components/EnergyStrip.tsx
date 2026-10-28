@@ -1,14 +1,27 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { energyAt, hoursRange, peakHours } from '../lib/engine';
+import {
+  energyAt,
+  hoursForWindow,
+  peaksForWindow,
+  slotWindow,
+} from '../lib/engine';
 import { useApp } from '../state';
 import { fonts } from '../theme';
+import type { Day } from '../types';
 
-export function EnergyStrip({ height = 64 }: { height?: number }) {
+export function EnergyStrip({
+  height = 64,
+  day = 'today',
+}: {
+  height?: number;
+  day?: Day;
+}) {
   const { state, colors } = useApp();
-  const hours = hoursRange(state.startH, state.endH);
-  const peaks = peakHours(state.startH, state.endH, state.energy);
+  const { from, to } = slotWindow(day, state.startH, state.endH);
+  const hours = hoursForWindow(from, to);
+  const peaks = peaksForWindow(from, to, state.energy);
 
   return (
     <View style={[styles.strip, { height }]}>
