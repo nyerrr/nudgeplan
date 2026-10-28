@@ -12,6 +12,15 @@ import { AppState as NativeAppState, useColorScheme } from 'react-native';
 import { useAuth } from './auth';
 import { checkBackend, requestCheckIn, requestSteps } from './lib/api';
 import {
+  deleteAllTasksRemote,
+  deleteTaskRemote,
+  fetchRemoteState,
+  reconstructFromRemote,
+  syncStepsForTask,
+  upsertProfile,
+  upsertTasks,
+} from './lib/db';
+import {
   applyCheckIn,
   applyOnboarding,
   availableMinutes,
@@ -42,6 +51,7 @@ import {
 } from './lib/notifications';
 import { clearState, loadState, saveState } from './lib/storage';
 import { paletteFor, type Palette } from './theme';
+import { supabase } from './lib/supabase';
 import type {
   AiStatus,
   AppState,
@@ -182,13 +192,114 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     setHydrated(false);
-    loadState(userId)
-      .then((saved) => {
+
+    (async () => {
+      try {
+        // For guests, use local storage only
+        if (user?.provider === 'guest') {
+          const saved = await loadState(userId);
+          if (!active) return;
+          if (saved) {
+            const { state: current } = rollover(saved);
+            const planned = planTasks(
+              current.tasks,
+              current.startH,
+              current.endH,
+              current.energy,
+            );
+            setState(
+              syncDaily({
+                ...current,
+                tasks: planned,
+                chat: current.chat.length
+                  ? current.chat
+                  : [welcomeMessage(current.name)],
+              }),
+            );
+          } else {
+            setState(initialState());
+          }
+          setLoadedFor(userId);
+          setHydrated(true);
+          return;
+        }
+
+        // For authenticated users with Supabase, try remote first
+        if (supabase) {
+          try {
+            const remote = await fetchRemoteState(userId);
+            if (!active) return;
+
+            // Check if we have remote data
+            if (remote && (remote.tasks.length > 0 || remote.profile)) {
+              const reconstructed = reconstructFromRemote(remote, initialState());
+              if (reconstructed && active) {
+                const { state: current } = rollover(reconstructed);
+                const planned = planTasks(
+                  current.tasks,
+                  current.startH,
+                  current.endH,
+                  current.energy,
+                );
+                setState(
+                  syncDaily({
+                    ...current,
+                    tasks: planned,
+                    chat: current.chat.length
+                      ? current.chat
+                      : [welcomeMessage(current.name)],
+                  }),
+                );
+                setLoadedFor(userId);
+                setHydrated(true);
+                return;
+              }
+            }
+
+            // No remote data, check for local migration
+            const saved = await loadState(userId);
+            if (!active) return;
+            if (saved) {
+              const { state: current } = rollover(saved);
+              const planned = planTasks(
+                current.tasks,
+                current.startH,
+                current.endH,
+                current.energy,
+              );
+              const migrated = syncDaily({
+                ...current,
+                tasks: planned,
+                chat: current.chat.length
+                  ? current.chat
+                  : [welcomeMessage(current.name)],
+              });
+              setState(migrated);
+              // Migrate to Supabase
+              try {
+                await upsertProfile(userId, migrated);
+                await upsertTasks(userId, migrated.tasks);
+                await Promise.all(migrated.tasks.map(t => syncStepsForTask(userId, t.id, t.steps)));
+                console.log('[sync] Migrated local data to Supabase');
+              } catch (e) {
+                console.warn('[sync] Migration to Supabase failed', e);
+              }
+            } else {
+              setState(initialState());
+            }
+            setLoadedFor(userId);
+            setHydrated(true);
+            return;
+          } catch (e) {
+            console.warn('[sync] Failed to fetch from Supabase, falling back to local', e);
+          }
+        }
+
+        // Fallback to local storage
+        const saved = await loadState(userId);
         if (!active) return;
         if (saved) {
           const { state: current } = rollover(saved);
-          // Re-anchor today's unfinished work to the current clock time, so a
-          // plan opened at 3pm does not keep showing 9am slots.
           const planned = planTasks(
             current.tasks,
             current.startH,
@@ -209,34 +320,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         setLoadedFor(userId);
         setHydrated(true);
-      })
-      .catch(() => {
+      } catch (e) {
         if (!active) return;
         setLoadedFor(userId);
         setHydrated(true);
-      });
+      }
+    })();
 
     return () => {
       active = false;
     };
-  }, [authHydrated, userId]);
+  }, [authHydrated, userId, user?.provider]);
 
   // Persist every meaningful change after hydration, with a tiny debounce.
   useEffect(() => {
     if (!hydrated || !userId || loadedFor !== userId) return;
     let active = true;
-    const id = setTimeout(() => {
-      void saveState(state, userId).then((ok) => {
-        if (!active) return;
-        if (ok) setStorageWarning(false);
-        else setStorageWarning(true);
-      });
-    }, 120);
+    const id = setTimeout(async () => {
+      // Always cache locally first
+      const ok = await saveState(state, userId);
+      if (!active) return;
+      if (ok) setStorageWarning(false);
+      else setStorageWarning(true);
+
+      // Sync to Supabase for authenticated non-guest users
+      if (user?.provider !== 'guest' && supabase) {
+        try {
+          await upsertProfile(userId, state);
+          await upsertTasks(userId, state.tasks);
+          // Sync steps per task
+          await Promise.all(state.tasks.map(t => syncStepsForTask(userId, t.id, t.steps)));
+        } catch (e) {
+          console.warn('[sync] Failed to push to Supabase', e);
+        }
+      }
+    }, 250);
     return () => {
       active = false;
       clearTimeout(id);
     };
-  }, [state, hydrated, userId, loadedFor]);
+  }, [state, hydrated, userId, loadedFor, user?.provider]);
 
   // Save immediately when the app is backgrounded.
   useEffect(() => {
@@ -583,8 +706,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
       setSheetTaskId(undefined);
       notify('Task deleted.', true);
+      // Sync deletion to Supabase for authenticated non-guest users
+      if (user?.provider !== 'guest' && supabase && userIdRef.current) {
+        void deleteTaskRemote(userIdRef.current, id).catch((e) =>
+          console.warn('[sync] Failed to delete task from Supabase', e),
+        );
+      }
     },
-    [commit, notify, snapshot],
+    [commit, notify, snapshot, user?.provider],
   );
 
   const applyTaskSteps = useCallback(
@@ -905,6 +1034,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await cancelTaskNudges();
     await cancelTimerNotification();
     await clearState(userIdRef.current);
+    // Clear from Supabase for authenticated non-guest users
+    if (user?.provider !== 'guest' && supabase && userIdRef.current) {
+      void deleteAllTasksRemote(userIdRef.current).catch((e) =>
+        console.warn('[sync] Failed to clear tasks from Supabase', e),
+      );
+    }
     nudgeKeyRef.current = '';
     setState(initialState());
     updateTimer(EMPTY_TIMER);
@@ -912,7 +1047,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setScreen('home');
     setToast(null);
     setStorageWarning(false);
-  }, [updateTimer]);
+  }, [updateTimer, user?.provider]);
 
   const resetPreferences = useCallback(() => {
     const current = stateRef.current;
