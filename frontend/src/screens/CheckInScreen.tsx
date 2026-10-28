@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '../components/Icon';
 import { Button } from '../components/ui';
@@ -26,6 +27,7 @@ export function CheckInScreen() {
     go,
     moveN,
   } = useApp();
+  const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
   const [showExamples, setShowExamples] = useState(false);
   const hasConversation = state.chat.length > 0;
@@ -184,8 +186,8 @@ export function CheckInScreen() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.bg }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={8}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 20}
     >
       <View style={styles.header}>
         <Text style={[type.title, { color: colors.ink }]}>
@@ -201,8 +203,9 @@ export function CheckInScreen() {
       <ScrollView
         ref={chatRef}
         style={{ flex: 1, minHeight: 0 }}
-        contentContainerStyle={styles.chat}
+        contentContainerStyle={[styles.chat, { flexGrow: 1 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         accessibilityLiveRegion="polite"
         showsVerticalScrollIndicator={false}
       >
@@ -257,7 +260,7 @@ export function CheckInScreen() {
         ) : null}
       </ScrollView>
 
-      <View style={[styles.chatbar, { backgroundColor: colors.bg }]}>
+      <View style={[styles.chatbar, { backgroundColor: colors.bg, paddingBottom: Math.max(insets.bottom, 14) }]}>
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded: showExamples }}

@@ -17,6 +17,7 @@
     "android": {
       "package": "com.rainier.nudgeplan",
       "versionCode": 1,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#000B77",
         "foregroundImage": "./assets/android-icon-foreground.png",
