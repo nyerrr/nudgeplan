@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EnergyStrip } from '../components/EnergyStrip';
-import { Card, Empty, Label } from '../components/ui';
+import { Card, Empty, Section, Stat } from '../components/ui';
 import {
   capacityPercent,
   completionRate,
@@ -70,137 +70,127 @@ export function InsightsScreen() {
         </Text>
       </Card>
 
-      <View style={styles.tiles}>
-        {tiles.slice(0, 2).map((tile) => (
-          <Card key={tile.label} style={styles.tile}>
-            <Text
-              style={{
-                color: colors.ink,
-                fontFamily: fonts.bold,
-                fontSize: 26,
-                lineHeight: 29,
-                fontVariant: ['tabular-nums'],
-              }}
-            >
-              {tile.value}
-            </Text>
-            <Text
-              style={{
-                color: colors.muted,
-                fontFamily: fonts.regular,
-                fontSize: 12,
-                marginTop: 2,
-              }}
-            >
-              {tile.label}
-            </Text>
-          </Card>
-        ))}
-      </View>
-      <View style={styles.secondarySummary}>
-        <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12.5 }}>
-          {steps} small {steps === 1 ? 'step' : 'steps'} finished · {streak} day
-          {streak === 1 ? '' : 's'} of check-ins
-        </Text>
-      </View>
-
-      <Label>Completion by day</Label>
-      <Card>
-        <View style={styles.bars}>
-          {values.map((value, index) => (
-            <View key={`${days[index]}-${index}`} style={styles.barColumn}>
-              <Text
-                style={{
-                  color: colors.ink,
-                  fontFamily: fonts.semibold,
-                  fontSize: 11,
-                  fontVariant: ['tabular-nums'],
-                }}
-              >
-                {value}%
-              </Text>
-              <View
-                style={{
-                  width: '100%',
-                  height: `${Math.max(4, value * 0.8)}%`,
-                  backgroundColor:
-                    index === values.length - 1
-                      ? colors.accent
-                      : colors.high,
-                  borderTopLeftRadius: 8,
-                  borderTopRightRadius: 8,
-                  borderBottomLeftRadius: 3,
-                  borderBottomRightRadius: 3,
-                }}
-              />
-              <Text
-                style={{
-                  color: colors.muted,
-                  fontFamily: fonts.regular,
-                  fontSize: 11,
-                }}
-              >
-                {days[index]}
-              </Text>
-            </View>
+      <Section label="At a glance" style={{ marginTop: 18 }}>
+        <View style={styles.tiles}>
+          {tiles.map((tile, index) => (
+            <Stat
+              key={tile.label}
+              value={tile.value}
+              label={tile.label}
+              tone={index === 0 ? 'accent' : 'default'}
+            />
           ))}
         </View>
-      </Card>
+      </Section>
 
-      <Label>Energy by hour</Label>
-      <Card>
-        <EnergyStrip height={84} />
-        <Text
-          style={[
-            type.hint,
-            {
-              color: colors.muted,
-              fontFamily: fonts.regular,
-              marginTop: 8,
-            },
-          ]}
-        >
-          {peaks.length
-            ? `Your peak is ${fmtHour(peaks[0])} to ${fmtHour(
-                peaks[peaks.length - 1] + 1,
-              )}. Heavy tasks go there first.`
-            : 'Set your working hours to see your energy curve.'}
-        </Text>
-      </Card>
+      <Section label="Completion by day" hint="Last 7 days">
+        <Card>
+          <View style={styles.bars}>
+            {values.map((value, index) => (
+              <View key={`${days[index]}-${index}`} style={styles.barColumn}>
+                <Text
+                  style={{
+                    color: colors.ink,
+                    fontFamily: fonts.semibold,
+                    fontSize: 11,
+                    fontVariant: ['tabular-nums'],
+                  }}
+                >
+                  {value}%
+                </Text>
+                <View
+                  style={{
+                    width: '100%',
+                    height: `${Math.max(4, value * 0.8)}%`,
+                    backgroundColor:
+                      index === values.length - 1
+                        ? colors.accent
+                        : colors.high,
+                    borderTopLeftRadius: 8,
+                    borderTopRightRadius: 8,
+                    borderBottomLeftRadius: 3,
+                    borderBottomRightRadius: 3,
+                  }}
+                />
+                <Text
+                  style={{
+                    color: colors.muted,
+                    fontFamily: fonts.regular,
+                    fontSize: 11,
+                  }}
+                >
+                  {days[index]}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </Card>
+      </Section>
 
-      <Label>Recent reality checks</Label>
-      <Card style={styles.history}>
-        {state.history.length ? (
-          state.history.slice(0, 3).map((entry) => (
-            <View key={entry.id} style={styles.historyRow}>
-              <Text
-                style={{
-                  color: colors.muted,
-                  fontFamily: fonts.regular,
-                  fontSize: 13,
-                }}
+      <Section label="Energy by hour">
+        <Card>
+          <EnergyStrip height={84} />
+          <Text
+            style={[
+              type.hint,
+              {
+                color: colors.muted,
+                fontFamily: fonts.regular,
+                marginTop: 8,
+              },
+            ]}
+          >
+            {peaks.length
+              ? `Your peak is ${fmtHour(peaks[0])} to ${fmtHour(
+                  peaks[peaks.length - 1] + 1,
+                )}. Heavy tasks go there first.`
+              : 'Set your working hours to see your energy curve.'}
+          </Text>
+        </Card>
+      </Section>
+
+      <Section label="Recent reality checks">
+        <Card>
+          {state.history.length ? (
+            state.history.slice(0, 3).map((entry, index) => (
+              <View
+                key={entry.id}
+                style={[
+                  styles.historyRow,
+                  index === 0
+                    ? null
+                    : { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+                ]}
               >
-                {entry.when}
-              </Text>
-              <Text
-                style={{
-                  color: colors.ink,
-                  fontFamily: fonts.semibold,
-                  fontSize: 13,
-                  flex: 1,
-                  textAlign: 'right',
-                }}
-              >
-                {entry.text}
-              </Text>
-            </View>
-          ))
-        ) : (
-          <Empty style={{ paddingVertical: 18 }}>
-            No reality checks yet. Check in, move a task, or adjust your plan to start building a useful history.
-          </Empty>
-        )}
-      </Card>
+                <Text
+                  style={{
+                    color: colors.muted,
+                    fontFamily: fonts.regular,
+                    fontSize: 12.5,
+                  }}
+                >
+                  {entry.when}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.ink,
+                    fontFamily: fonts.medium,
+                    fontSize: 13,
+                    flex: 1,
+                    textAlign: 'right',
+                  }}
+                >
+                  {entry.text}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <Empty style={{ paddingVertical: 18 }}>
+              No reality checks yet. Check in, move a task, or adjust your plan to start building a useful history.
+            </Empty>
+          )}
+        </Card>
+      </Section>
     </ScrollView>
   );
 }
@@ -215,15 +205,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-    marginTop: 16,
-  },
-  secondarySummary: {
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  tile: {
-    width: '48%',
-    flexGrow: 1,
   },
   bars: {
     flexDirection: 'row',
@@ -240,14 +221,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  history: {
-    gap: 10,
-  },
   historyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
+    paddingVertical: 10,
   },
   takeaway: {
     marginTop: 16,

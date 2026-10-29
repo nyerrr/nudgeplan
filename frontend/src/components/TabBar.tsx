@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useApp } from '../state';
-import { fonts } from '../theme';
+import { elevationStyle, fonts } from '../theme';
 import type { Screen } from '../types';
 import { Icon, type IoniconName } from './Icon';
 
@@ -27,7 +27,11 @@ export function TabBar() {
         accessibilityState={{ selected: active }}
         aria-selected={active}
         onPress={() => go(tab.screen)}
-        style={({ pressed }) => [styles.tab, { opacity: pressed ? 0.7 : 1 }]}
+        style={({ pressed }) => [
+          styles.tab,
+          active ? { backgroundColor: colors.surface2 } : null,
+          { opacity: pressed ? 0.7 : 1 },
+        ]}
       >
         <Icon
           name={tab.icon}
@@ -53,10 +57,12 @@ export function TabBar() {
     <View
       style={[
         styles.bar,
+        elevationStyle(colors, 'md'),
         {
           backgroundColor: colors.surface,
           borderTopColor: colors.line,
           paddingBottom: Math.max(10, insets.bottom),
+          shadowOffset: { width: 0, height: -4 },
         },
       ]}
     >
@@ -114,6 +120,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
     paddingVertical: 5,
+    borderRadius: 14,
   },
   tabLabel: {
     fontSize: 10,

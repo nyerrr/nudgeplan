@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { BackButton, Card, Label } from '../components/ui';
+import { BackButton, Card, Section } from '../components/ui';
 import { useApp } from '../state';
 import { fonts, type } from '../theme';
 
@@ -48,8 +48,7 @@ export function PrivacyScreen() {
       </Text>
 
       {SECTIONS.map((section) => (
-        <View key={section.title}>
-          <Label>{section.title}</Label>
+        <Section key={section.title} label={section.title}>
           <Card>
             <Text
               style={[
@@ -64,7 +63,7 @@ export function PrivacyScreen() {
               {section.body}
             </Text>
           </Card>
-        </View>
+        </Section>
       ))}
 
       <Text

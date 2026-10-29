@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 
 import { useApp } from '../state';
-import { fonts, type } from '../theme';
+import { fonts, elevationStyle, type } from '../theme';
 import { fmtDuration, fmtTime } from '../lib/engine';
 import type { Task } from '../types';
 import { Icon } from './Icon';
@@ -56,6 +56,7 @@ export function TaskRow({
         onPress={() => openTaskSheet(task.id)}
         style={({ pressed }) => [
           styles.card,
+          elevationStyle(colors),
           {
             backgroundColor: colors.surface,
             borderColor: colors.line,

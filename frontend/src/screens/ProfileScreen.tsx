@@ -18,7 +18,9 @@ import {
   BackButton,
   Button,
   Card,
-  Label,
+  Group,
+  GroupRow,
+  Section,
   Segmented,
   Toggle,
 } from '../components/ui';
@@ -97,8 +99,8 @@ export function ProfileScreen() {
         </View>
       </View>
 
-      <Label>Account</Label>
-      <Card style={{ paddingVertical: 2 }}>
+      <Section label="Account">
+        <Card style={{ paddingVertical: 2 }}>
         <View style={styles.accountRow}>
           <View
             style={[styles.accountIcon, { backgroundColor: colors.surface2 }]}
@@ -206,9 +208,11 @@ export function ProfileScreen() {
             </Text>
           </Pressable>
         )}
-      </Card>
+        </Card>
+      </Section>
 
-      <Card style={{ marginTop: 14 }}>
+      <Section label="Preferences">
+        <Card>
         <Text
           style={[
             styles.fieldLabel,
@@ -310,11 +314,11 @@ export function ProfileScreen() {
             label="Nudges"
           />
         </View>
+        </Card>
+      </Section>
 
-      </Card>
-
-      <Label>Appearance</Label>
-      <Card>
+      <Section label="Appearance">
+        <Card>
         <Text style={[styles.fieldLabel, { color: colors.muted, marginTop: 0 }]}>Theme</Text>
         <Segmented<ThemeMode>
           options={[
@@ -325,7 +329,8 @@ export function ProfileScreen() {
           value={state.theme}
           onChange={setThemeMode}
         />
-      </Card>
+        </Card>
+      </Section>
 
       <Modal
         visible={timePicker !== null}
@@ -400,16 +405,60 @@ export function ProfileScreen() {
         </View>
       </Modal>
 
-      <Label>Notifications</Label>
-      <Card style={{ paddingVertical: 2 }}>
-        <View style={[styles.statusRow, { borderBottomColor: colors.line }]}>
-          <View style={[styles.statusDot, { backgroundColor: state.nudges ? colors.accent : colors.muted }]} />
-          <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12.5 }}>
-            {state.nudges ? 'Gentle reminders are enabled' : 'Gentle reminders are off'}
-          </Text>
-        </View>
-        <View style={[styles.linkrow, { paddingVertical: 10 }]}>
-          <View style={{ flex: 1 }}>
+      <Section label="Notifications">
+        <Card style={{ paddingVertical: 2 }}>
+          <View style={[styles.statusRow, { borderBottomColor: colors.line }]}>
+            <View style={[styles.statusDot, { backgroundColor: state.nudges ? colors.accent : colors.muted }]} />
+            <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12.5 }}>
+              {state.nudges ? 'Gentle reminders are enabled' : 'Gentle reminders are off'}
+            </Text>
+          </View>
+          <View style={[styles.linkrow, { paddingVertical: 10 }]}>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: colors.ink,
+                  fontFamily: fonts.semibold,
+                  fontSize: 14,
+                }}
+              >
+                Send a test nudge
+              </Text>
+              <Text
+                style={{
+                  color: colors.muted,
+                  fontFamily: fonts.regular,
+                  fontSize: 12.5,
+                }}
+              >
+                Check notification permissions on this device
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void testNudge()}
+              style={[
+                styles.smallBtn,
+                { backgroundColor: colors.surface2, borderColor: colors.line },
+              ]}
+            >
+              <Text
+                style={{
+                  color: colors.ink,
+                  fontFamily: fonts.semibold,
+                  fontSize: 13,
+                }}
+              >
+                Test
+              </Text>
+            </Pressable>
+          </View>
+        </Card>
+      </Section>
+
+      <Section label="Planning engine">
+        <Card>
+          <View style={{ gap: 6 }}>
             <Text
               style={{
                 color: colors.ink,
@@ -417,233 +466,185 @@ export function ProfileScreen() {
                 fontSize: 14,
               }}
             >
-              Send a test nudge
+              Ready to plan
             </Text>
             <Text
               style={{
                 color: colors.muted,
                 fontFamily: fonts.regular,
-                fontSize: 12.5,
-              }}
-            >
-              Check notification permissions on this device
-            </Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void testNudge()}
-            style={[
-              styles.smallBtn,
-              { backgroundColor: colors.surface2, borderColor: colors.line },
-            ]}
-          >
-            <Text
-              style={{
-                color: colors.ink,
-                fontFamily: fonts.semibold,
                 fontSize: 13,
               }}
             >
-              Test
+              {aiStatus === 'checking'
+                ? 'Checking readiness...'
+                : aiStatus === 'online'
+                  ? 'Ready to help plan your day'
+                  : 'Offline planning is available on this device'}
             </Text>
-          </Pressable>
-        </View>
-      </Card>
-
-      <Label>Planning engine</Label>
-      <Card>
-        <View style={{ gap: 6 }}>
-          <Text
-            style={{
-              color: colors.ink,
-              fontFamily: fonts.semibold,
-              fontSize: 14,
-            }}
-          >
-            Ready to plan
-          </Text>
-          <Text
-            style={{
-              color: colors.muted,
-              fontFamily: fonts.regular,
-              fontSize: 13,
-            }}
-          >
-            {aiStatus === 'checking'
-              ? 'Checking readiness...'
-              : aiStatus === 'online'
-                ? 'Ready to help plan your day'
-                : 'Offline planning is available on this device'}
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void checkAi()}
-            style={[
-              styles.smallBtn,
-              {
-                alignSelf: 'flex-start',
-                marginTop: 4,
-                backgroundColor: colors.surface2,
-                borderColor: colors.line,
-              },
-            ]}
-          >
-            <Text
-              style={{
-                color: colors.ink,
-                fontFamily: fonts.semibold,
-                fontSize: 13,
-              }}
-            >
-              Recheck connection
-            </Text>
-          </Pressable>
-          {aiInfo ? (
-            <Text style={[styles.technical, { color: colors.muted }]}>
-              Technical: {aiInfo.model} · Demo mode: {aiInfo.mock_mode ? 'on' : 'off'}
-            </Text>
-          ) : null}
-        </View>
-      </Card>
-
-      <Label>Data</Label>
-      <Card style={{ paddingVertical: 2 }}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={async () => {
-            const json = exportData();
-            try {
-              await Share.share({
-                message: json,
-                title: 'NudgePlan data export',
-              });
-            } catch {
-              if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
-                try {
-                  await navigator.clipboard?.writeText(json);
-                  Alert.alert('Copied', 'Export JSON copied to clipboard.');
-                } catch {
-                  Alert.alert('Export', 'Copy this data manually.');
-                }
-              } else {
-                Alert.alert('Export', json.slice(0, 200) + (json.length > 200 ? '...' : ''));
-              }
-            }
-          }}
-          style={styles.linkrow}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.ink, fontFamily: fonts.semibold, fontSize: 14 }}>
-              Export data
-            </Text>
-            <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12.5 }}>
-              Save a copy of your tasks and preferences
-            </Text>
-          </View>
-          <Icon name="share-outline" size={18} color={colors.muted} />
-        </Pressable>
-        <Pressable
-        accessibilityRole="button"
-        onPress={() =>
-          Alert.alert(
-            'Reset preferences',
-            'Reset your planning hours, energy, nudges, and theme without deleting tasks or history?',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Reset', onPress: resetPreferences },
-            ],
-          )
-        }
-        style={[styles.linkrow, { borderTopWidth: 1, borderTopColor: colors.line }]}
-        >
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.ink, fontFamily: fonts.semibold, fontSize: 14 }}>
-            Reset preferences
-          </Text>
-          <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12.5 }}>
-            Keep your tasks and history
-          </Text>
-        </View>
-        <Icon name="refresh-outline" size={18} color={colors.muted} />
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            Alert.alert(
-              'Delete all data',
-              'This removes all tasks, history, and settings from this device. This cannot be undone.',
-              [
-                { text: 'Cancel', style: 'cancel' },
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void checkAi()}
+              style={[
+                styles.smallBtn,
                 {
-                  text: 'Delete',
-                  style: 'destructive',
-                  onPress: () => void resetApp(),
+                  alignSelf: 'flex-start',
+                  marginTop: 4,
+                  backgroundColor: colors.surface2,
+                  borderColor: colors.line,
                 },
-              ],
-            );
-          }}
-          style={[styles.linkrow, { borderTopWidth: 1, borderTopColor: colors.line }]}
-        >
+              ]}
+            >
+              <Text
+                style={{
+                  color: colors.ink,
+                  fontFamily: fonts.semibold,
+                  fontSize: 13,
+                }}
+              >
+                Recheck connection
+              </Text>
+            </Pressable>
+            {aiInfo ? (
+              <Text style={[styles.technical, { color: colors.muted }]}>
+                Technical: {aiInfo.model} · Demo mode: {aiInfo.mock_mode ? 'on' : 'off'}
+              </Text>
+            ) : null}
+          </View>
+        </Card>
+      </Section>
+
+      <Section label="Data">
+        <Group>
+          <GroupRow
+            accessibilityLabel="Export data"
+            onPress={async () => {
+              const json = exportData();
+              try {
+                await Share.share({
+                  message: json,
+                  title: 'NudgePlan data export',
+                });
+              } catch {
+                if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
+                  try {
+                    await navigator.clipboard?.writeText(json);
+                    Alert.alert('Copied', 'Export JSON copied to clipboard.');
+                  } catch {
+                    Alert.alert('Export', 'Copy this data manually.');
+                  }
+                } else {
+                  Alert.alert('Export', json.slice(0, 200) + (json.length > 200 ? '...' : ''));
+                }
+              }
+            }}
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ color: colors.ink, fontFamily: fonts.semibold, fontSize: 14 }}>
+                Export data
+              </Text>
+              <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12.5 }}>
+                Save a copy of your tasks and preferences
+              </Text>
+            </View>
+            <Icon name="share-outline" size={18} color={colors.muted} />
+          </GroupRow>
+          <GroupRow
+            accessibilityLabel="Reset preferences"
+            onPress={() =>
+              Alert.alert(
+                'Reset preferences',
+                'Reset your planning hours, energy, nudges, and theme without deleting tasks or history?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Reset', onPress: resetPreferences },
+                ],
+              )
+            }
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ color: colors.ink, fontFamily: fonts.semibold, fontSize: 14 }}>
+                Reset preferences
+              </Text>
+              <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12.5 }}>
+                Keep your tasks and history
+              </Text>
+            </View>
+            <Icon name="refresh-outline" size={18} color={colors.muted} />
+          </GroupRow>
+          <GroupRow
+            last
+            accessibilityLabel="Delete all data"
+            onPress={() =>
+              Alert.alert(
+                'Delete all data',
+                'This removes all tasks, history, and settings from this device. This cannot be undone.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => void resetApp(),
+                  },
+                ],
+              )
+            }
+          >
+            <Text
+              style={{
+                color: colors.warn,
+                fontFamily: fonts.semibold,
+                fontSize: 14,
+                flex: 1,
+              }}
+            >
+              Delete all data
+            </Text>
+            <Icon name="trash-outline" size={18} color={colors.warn} />
+          </GroupRow>
+        </Group>
+        {storageWarning ? (
           <Text
             style={{
               color: colors.warn,
-              fontFamily: fonts.semibold,
-              fontSize: 14,
+              fontFamily: fonts.regular,
+              fontSize: 12.5,
             }}
           >
-            Delete all data
+            Storage warning: changes may not be saved fully on this device.
           </Text>
-          <Icon name="trash-outline" size={18} color={colors.warn} />
-        </Pressable>
-      </Card>
-      {storageWarning ? (
-        <Text
-          style={{
-            color: colors.warn,
-            fontFamily: fonts.regular,
-            fontSize: 12.5,
-            marginTop: 8,
-          }}
-        >
-          Storage warning: changes may not be saved fully on this device.
-        </Text>
-      ) : null}
+        ) : null}
+      </Section>
 
-      <Label>About</Label>
-      <Card style={{ paddingVertical: 2 }}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => go('about')}
-          style={styles.linkrow}
-        >
-          <Text
-            style={{
-              color: colors.ink,
-              fontFamily: fonts.semibold,
-              fontSize: 14,
-            }}
-          >
-            About NudgePlan
-          </Text>
-          <Icon name="chevron-forward" size={18} color={colors.muted} />
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => go('privacy')}
-          style={[styles.linkrow, { borderTopWidth: 1, borderTopColor: colors.line }]}
-        >
-          <Text
-            style={{
-              color: colors.ink,
-              fontFamily: fonts.semibold,
-              fontSize: 14,
-            }}
-          >
-            Privacy
-          </Text>
-          <Icon name="chevron-forward" size={18} color={colors.muted} />
-        </Pressable>
-      </Card>
+      <Section label="About">
+        <Group>
+          <GroupRow accessibilityLabel="About NudgePlan" onPress={() => go('about')}>
+            <Text
+              style={{
+                color: colors.ink,
+                fontFamily: fonts.semibold,
+                fontSize: 14,
+                flex: 1,
+              }}
+            >
+              About NudgePlan
+            </Text>
+            <Icon name="chevron-forward" size={18} color={colors.muted} />
+          </GroupRow>
+          <GroupRow last accessibilityLabel="Privacy" onPress={() => go('privacy')}>
+            <Text
+              style={{
+                color: colors.ink,
+                fontFamily: fonts.semibold,
+                fontSize: 14,
+                flex: 1,
+              }}
+            >
+              Privacy
+            </Text>
+            <Icon name="chevron-forward" size={18} color={colors.muted} />
+          </GroupRow>
+        </Group>
+      </Section>
     </ScrollView>
   );
 }
@@ -842,7 +843,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
     paddingVertical: 12,
-    borderBottomWidth: 1,
+    borderTopWidth: 1,
     marginTop: 10,
   },
   linkrow: {

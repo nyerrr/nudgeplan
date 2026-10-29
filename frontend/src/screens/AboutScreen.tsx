@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Icon, type IoniconName } from '../components/Icon';
-import { BackButton, Card, Label } from '../components/ui';
+import { BackButton, Card, Section } from '../components/ui';
 import { useApp } from '../state';
 import { fonts, type } from '../theme';
 import type { Screen } from '../types';
@@ -87,8 +87,8 @@ export function AboutScreen() {
         check-in, built for people juggling multiple tasks, goals and projects.
       </Text>
 
-      <Label>Problems in most apps</Label>
-      <View style={styles.stack}>
+      <Section label="Problems in most apps">
+        <View style={styles.stack}>
         {PROBLEMS.map(([title, body], index) => (
           <Card key={title} style={styles.problem}>
             <View style={[styles.num, { backgroundColor: colors.brand }]}>
@@ -125,10 +125,11 @@ export function AboutScreen() {
             </View>
           </Card>
         ))}
-      </View>
+        </View>
+      </Section>
 
-      <Label>Proposed solution</Label>
-      <View style={styles.stack}>
+      <Section label="Proposed solution">
+        <View style={styles.stack}>
         {FEATURES.map((feature) => (
           <Card key={feature.title} style={{ paddingVertical: 12 }}>
             <Pressable
@@ -160,10 +161,11 @@ export function AboutScreen() {
             </Pressable>
           </Card>
         ))}
-      </View>
+        </View>
+      </Section>
 
-      <Label>Who it is for</Label>
-      <View style={styles.chipLine}>
+      <Section label="Who it is for">
+        <View style={styles.chipLine}>
         {['Professionals', 'Students', 'Remote workers', 'Project planners'].map(
           (item) => (
             <View
@@ -188,10 +190,11 @@ export function AboutScreen() {
             </View>
           ),
         )}
-      </View>
+        </View>
+      </Section>
 
-      <Label>Growth plan</Label>
-      <View style={styles.stack}>
+      <Section label="Growth plan">
+        <View style={styles.stack}>
         {PHASES.map(([title, body], index) => (
           <Card key={title} style={styles.problem}>
             <View style={[styles.num, { backgroundColor: colors.brand }]}>
@@ -228,10 +231,11 @@ export function AboutScreen() {
             </View>
           </Card>
         ))}
-      </View>
+        </View>
+      </Section>
 
-      <Label>Team</Label>
-      <View style={styles.stack}>
+      <Section label="Team">
+        <View style={styles.stack}>
         {TEAM.map(([initials, name, role]) => (
           <Card key={name} style={styles.person}>
             <View
@@ -272,10 +276,11 @@ export function AboutScreen() {
             </View>
           </Card>
         ))}
-      </View>
+        </View>
+      </Section>
 
-      <Label>Closing statement</Label>
-      <Card>
+      <Section label="Closing statement">
+        <Card>
         <Text
           style={{
             color: colors.ink,
@@ -297,7 +302,8 @@ export function AboutScreen() {
           conversation, so professionals, students and remote workers spend
           their time doing the work, not organizing it.
         </Text>
-      </Card>
+        </Card>
+      </Section>
 
       <Text
         style={{
@@ -305,7 +311,7 @@ export function AboutScreen() {
           fontFamily: fonts.regular,
           fontSize: 12.5,
           textAlign: 'center',
-          marginTop: 20,
+          marginTop: 24,
         }}
       >
         Thynk Unlimited

@@ -11,14 +11,14 @@ import {
 } from 'react-native';
 
 import { Icon } from '../components/Icon';
-import { Button, Card, Empty, Label, Meter } from '../components/ui';
+import { Button, Card, Empty, Meter, Section } from '../components/ui';
 import {
   fmtDuration,
   fmtTimer,
   sortedTasks,
 } from '../lib/engine';
 import { useApp } from '../state';
-import { fonts, type } from '../theme';
+import { elevationStyle, fonts, type } from '../theme';
 
 export function FocusScreen() {
   const {
@@ -108,18 +108,11 @@ export function FocusScreen() {
         </Card>
       ) : (
         <View style={{ marginTop: 14 }}>
-          <View style={styles.pickerHead}>
-            <Label style={{ marginTop: 0 }}>Choose a task</Label>
-            <Text
-              style={{
-                color: colors.muted,
-                fontFamily: fonts.regular,
-                fontSize: 12.5,
-              }}
-            >
-              {candidates.length} open
-            </Text>
-          </View>
+          <Section
+            label="Choose a task"
+            hint={`${candidates.length} open`}
+            style={{ marginTop: 0 }}
+          >
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Selected task: ${selected.title}`}
@@ -127,6 +120,7 @@ export function FocusScreen() {
             onPress={() => setPickerOpen(true)}
             style={({ pressed }) => [
               styles.taskPicker,
+              elevationStyle(colors),
               {
                 backgroundColor: colors.surface,
                 borderColor: colors.line,
@@ -158,6 +152,7 @@ export function FocusScreen() {
             </View>
             <Icon name="chevron-down" size={18} color={colors.brand} />
           </Pressable>
+          </Section>
 
           <Modal
             visible={pickerOpen}
@@ -587,21 +582,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingBottom: 28,
   },
-  pickerHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 8,
-  },
   taskPicker: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   taskPickerText: {
     flex: 1,

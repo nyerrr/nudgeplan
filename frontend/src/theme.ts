@@ -1,4 +1,4 @@
-import type { TextStyle } from 'react-native';
+import type { TextStyle, ViewStyle } from 'react-native';
 
 import type { Effort, ResolvedTheme } from './types';
 
@@ -129,6 +129,45 @@ export const type = {
 
 export function effortColor(colors: Palette, effort: Effort): string {
   return effort === 'high' ? colors.high : effort === 'med' ? colors.med : colors.low;
+}
+
+/**
+ * Layout scale shared by every screen. Keeping spacing/radius in one place is
+ * what makes unrelated cards feel like they belong to the same surface system.
+ */
+export const space = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 28,
+} as const;
+
+export const radius = {
+  sm: 10,
+  md: 14,
+  lg: 18,
+  xl: 24,
+  pill: 999,
+} as const;
+
+export type Elevation = 'none' | 'sm' | 'md';
+
+/** Soft, colour-matched elevation. Cards should float slightly above the page. */
+export function elevationStyle(
+  colors: Palette,
+  level: Elevation = 'sm',
+): ViewStyle {
+  if (level === 'none') return {};
+  const raised = level === 'md';
+  return {
+    shadowColor: colors.shadow,
+    shadowOpacity: 1,
+    shadowRadius: raised ? 20 : 12,
+    shadowOffset: { width: 0, height: raised ? 8 : 3 },
+    elevation: raised ? 6 : 2,
+  };
 }
 
 export function effortLabel(effort: Effort): string {

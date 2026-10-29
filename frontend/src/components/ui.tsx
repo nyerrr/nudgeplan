@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 
 import { useApp } from '../state';
-import { effortLabel, fonts, type } from '../theme';
+import { effortLabel, elevationStyle, fonts, radius, space, type } from '../theme';
 import type { Effort } from '../types';
 import { Icon, type IoniconName } from './Icon';
 
@@ -30,24 +30,187 @@ export function Label({
   );
 }
 
+/**
+ * Section header + content. The trailing hairline rule gives each block a clear
+ * visual boundary, which is what separates one card group from the next.
+ */
+export function Section({
+  label,
+  hint,
+  action,
+  children,
+  style,
+}: {
+  label: string;
+  hint?: string;
+  action?: ReactNode;
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { colors } = useApp();
+  return (
+    <View style={[styles.section, style]}>
+      <View style={styles.sectionHead}>
+        <Text style={[styles.sectionLabel, { color: colors.muted }]}>
+          {label}
+        </Text>
+        <View style={[styles.sectionRule, { backgroundColor: colors.line }]} />
+        {hint ? (
+          <Text style={[styles.sectionHint, { color: colors.muted }]}>
+            {hint}
+          </Text>
+        ) : null}
+        {action}
+      </View>
+      <View style={styles.sectionBody}>{children}</View>
+    </View>
+  );
+}
+
+export function Divider({ style }: { style?: StyleProp<ViewStyle> }) {
+  const { colors } = useApp();
+  return (
+    <View
+      style={[
+        {
+          height: StyleSheet.hairlineWidth,
+          backgroundColor: colors.line,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+type CardTone = 'default' | 'muted' | 'accent' | 'warn';
+
 export function Card({
+  children,
+  style,
+  tone = 'default',
+  padded = true,
+  elevated = true,
+}: {
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  tone?: CardTone;
+  padded?: boolean;
+  elevated?: boolean;
+}) {
+  const { colors } = useApp();
+  const background =
+    tone === 'accent'
+      ? colors.accent
+      : tone === 'muted'
+        ? colors.surface2
+        : colors.surface;
+  const border =
+    tone === 'warn'
+      ? colors.warn
+      : tone === 'accent'
+        ? colors.brand
+        : colors.line;
+
+  return (
+    <View
+      style={[
+        styles.card,
+        padded ? styles.cardPadded : null,
+        { backgroundColor: background, borderColor: border },
+        elevated ? elevationStyle(colors) : null,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+/**
+ * A single card that holds a list of rows. Rows are separated by hairlines
+ * instead of each row becoming its own floating card.
+ */
+export function Group({
   children,
   style,
 }: {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
-  const { colors } = useApp();
   return (
-    <View
-      style={[
-        styles.card,
-        { backgroundColor: colors.surface, borderColor: colors.line },
-        style,
-      ]}
+    <Card padded={false} style={[{ overflow: 'hidden' }, style]}>
+      {children}
+    </Card>
+  );
+}
+
+export function GroupRow({
+  children,
+  onPress,
+  accessibilityLabel,
+  last,
+  style,
+}: {
+  children: ReactNode;
+  onPress?: () => void;
+  accessibilityLabel?: string;
+  last?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { colors } = useApp();
+  const base: StyleProp<ViewStyle> = [
+    styles.groupRow,
+    last
+      ? null
+      : { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
+    style,
+  ];
+
+  if (!onPress) {
+    return <View style={base}>{children}</View>;
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      style={({ pressed }) => [base, { opacity: pressed ? 0.65 : 1 }]}
     >
       {children}
-    </View>
+    </Pressable>
+  );
+}
+
+export function Stat({
+  value,
+  label,
+  tone = 'default',
+}: {
+  value: string;
+  label: string;
+  tone?: 'default' | 'accent';
+}) {
+  const { colors } = useApp();
+  return (
+    <Card tone={tone} style={styles.stat}>
+      <Text
+        style={[
+          styles.statValue,
+          { color: tone === 'accent' ? colors.onAccent : colors.ink },
+        ]}
+      >
+        {value}
+      </Text>
+      <Text
+        style={[
+          styles.statLabel,
+          { color: tone === 'accent' ? colors.onAccent : colors.muted },
+        ]}
+      >
+        {label}
+      </Text>
+    </Card>
   );
 }
 
@@ -335,13 +498,67 @@ export function BackButton({
 
 const styles = StyleSheet.create({
   label: {
-    marginTop: 22,
-    marginBottom: 8,
+    marginTop: space.xxl,
+    marginBottom: space.sm,
+  },
+  section: {
+    marginTop: space.xxl,
+  },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    marginBottom: space.md,
+    minHeight: 18,
+  },
+  sectionLabel: {
+    ...type.label,
+    fontSize: 11,
+    letterSpacing: 0.9,
+  },
+  sectionRule: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    opacity: 0.9,
+  },
+  sectionHint: {
+    fontFamily: fonts.medium,
+    fontSize: 11,
+    letterSpacing: 0.2,
+  },
+  sectionBody: {
+    gap: space.md,
   },
   card: {
     borderWidth: 1,
-    borderRadius: 18,
-    padding: 14,
+    borderRadius: radius.lg,
+  },
+  cardPadded: {
+    padding: space.lg,
+  },
+  groupRow: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+  },
+  stat: {
+    flexGrow: 1,
+    flexBasis: '47%',
+    paddingVertical: space.lg,
+  },
+  statValue: {
+    fontFamily: fonts.bold,
+    fontSize: 24,
+    lineHeight: 28,
+    fontVariant: ['tabular-nums'],
+  },
+  statLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    marginTop: 2,
   },
   button: {
     minHeight: 44,

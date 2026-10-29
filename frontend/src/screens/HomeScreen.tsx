@@ -13,8 +13,8 @@ import { TaskRow } from '../components/TaskRow';
 import {
   Button,
   Card,
-  Label,
   Meter,
+  Section,
   Segmented,
 } from '../components/ui';
 import {
@@ -26,7 +26,7 @@ import {
 } from '../lib/engine';
 import { useVoiceInput } from '../lib/useVoiceInput';
 import { useApp } from '../state';
-import { fonts, type } from '../theme';
+import { fonts, elevationStyle, space, type } from '../theme';
 import type { Energy } from '../types';
 
 export function HomeScreen() {
@@ -123,6 +123,7 @@ export function HomeScreen() {
       <View
         style={[
           styles.askbar,
+          elevationStyle(colors),
           { backgroundColor: colors.surface, borderColor: colors.accent },
         ]}
       >
@@ -169,7 +170,7 @@ export function HomeScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.energySection}>
+      <Card style={styles.energyCard}>
         <View style={styles.sectionHeading}>
           <Text style={[styles.sectionTitle, { color: colors.ink }]}>
             How&apos;s your energy?
@@ -187,13 +188,15 @@ export function HomeScreen() {
           value={state.energy}
           onChange={setEnergy}
         />
-      </View>
+      </Card>
 
       <View
         style={[
           styles.reality,
+          elevationStyle(colors),
           {
             backgroundColor: reality.over ? '#FEE2E2' : colors.accent,
+            borderColor: reality.over ? '#FCA5A5' : colors.brand,
             borderLeftColor: reality.over ? colors.warn : colors.brand,
           },
         ]}
@@ -235,7 +238,7 @@ export function HomeScreen() {
         >
           {reality.over
             ? `${fmtDuration(reality.planned)} planned of ${fmtDuration(reality.available)} open`
-            : 'Your day has room. Start with one task.'}
+            : `Planning around ${fmtDuration(reality.available)} of open time today.`}
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -282,19 +285,6 @@ export function HomeScreen() {
         ) : null}
       </View>
 
-      <Text
-        style={[
-          type.hint,
-          {
-            color: colors.muted,
-            marginTop: 12,
-            fontFamily: fonts.regular,
-          },
-        ]}
-      >
-        Planning around {fmtDuration(reality.available)} of open time today.
-      </Text>
-
       {next ? (
         <Card style={styles.recommended}>
           <View style={styles.recommendedHeader}>
@@ -323,42 +313,42 @@ export function HomeScreen() {
         </Card>
       ) : null}
 
-      <Label>Up next</Label>
-      {upNext.length ? (
-        <View style={styles.list}>
-          {upNext.map((task) => (
-            <TaskRow key={task.id} task={task} withTime />
-          ))}
-        </View>
-      ) : (
-        <Card style={styles.emptyState}>
-          <Icon name="sparkles-outline" size={30} color={colors.brand} />
-          <Text style={[styles.emptyTitle, { color: colors.ink }]}>
-            Nothing on the plan yet
-          </Text>
-          <Text style={[styles.emptyBody, { color: colors.muted }]}>
-            Brain dump what&apos;s on your mind and I&apos;ll shape it into a realistic next step.
-          </Text>
-          <Button
-            block
-            label="Brain dump"
-            onPress={() => go('checkin')}
-            style={{ marginTop: 12 }}
-          />
-          <Button
-            block
-            small
-            ghost
-            label="Add a specific task"
-            onPress={() => openTaskSheet(null)}
-            style={{ marginTop: 6 }}
-          />
-        </Card>
-      )}
+      <Section label="Up next" hint={upNext.length ? `${upNext.length} open` : undefined}>
+        {upNext.length ? (
+          <View style={styles.list}>
+            {upNext.map((task) => (
+              <TaskRow key={task.id} task={task} withTime />
+            ))}
+          </View>
+        ) : (
+          <Card style={styles.emptyState}>
+            <Icon name="sparkles-outline" size={30} color={colors.brand} />
+            <Text style={[styles.emptyTitle, { color: colors.ink }]}>
+              Nothing on the plan yet
+            </Text>
+            <Text style={[styles.emptyBody, { color: colors.muted }]}>
+              Brain dump what&apos;s on your mind and I&apos;ll shape it into a realistic next step.
+            </Text>
+            <Button
+              block
+              label="Brain dump"
+              onPress={() => go('checkin')}
+              style={{ marginTop: 12 }}
+            />
+            <Button
+              block
+              small
+              ghost
+              label="Add a specific task"
+              onPress={() => openTaskSheet(null)}
+              style={{ marginTop: 6 }}
+            />
+          </Card>
+        )}
+      </Section>
 
       {state.nudges ? (
-        <>
-          <Label>A gentle nudge</Label>
+        <Section label="A gentle nudge">
           <Card style={styles.nudgeCard}>
             {next ? (
               <>
@@ -405,7 +395,7 @@ export function HomeScreen() {
               </Text>
             )}
           </Card>
-        </>
+        </Section>
       ) : null}
     </ScrollView>
   );
@@ -478,14 +468,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  energySection: {
-    marginTop: 18,
+  energyCard: {
+    marginTop: space.xl,
   },
   sectionHeading: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 9,
+    gap: 8,
+    marginBottom: 10,
   },
   sectionTitle: {
     fontFamily: fonts.bold,
@@ -498,10 +489,11 @@ const styles = StyleSheet.create({
   },
   reality: {
     borderRadius: 18,
+    borderWidth: 1,
     borderLeftWidth: 4,
-    paddingVertical: 14,
+    paddingVertical: 15,
     paddingHorizontal: 16,
-    marginTop: 14,
+    marginTop: space.lg,
   },
   realityK: {
     fontFamily: fonts.bold,
@@ -531,7 +523,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   list: {
-    gap: 8,
+    gap: 10,
   },
   emptyState: {
     alignItems: 'center',
@@ -589,7 +581,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   recommended: {
-    marginTop: 14,
+    marginTop: space.xl,
     borderLeftWidth: 4,
     borderLeftColor: '#3F8EFC',
   },

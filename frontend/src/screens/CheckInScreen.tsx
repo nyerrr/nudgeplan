@@ -15,7 +15,7 @@ import { Icon } from '../components/Icon';
 import { Button } from '../components/ui';
 import { useVoiceInput } from '../lib/useVoiceInput';
 import { useApp } from '../state';
-import { fonts, type } from '../theme';
+import { elevationStyle, fonts, type } from '../theme';
 import type { ChatCta, ChatMessage } from '../types';
 
 export function CheckInScreen() {
@@ -298,6 +298,7 @@ export function CheckInScreen() {
         <View
           style={[
             styles.askbar,
+            elevationStyle(colors),
             { backgroundColor: colors.surface, borderColor: colors.accent },
           ]}
         >
