@@ -12,11 +12,22 @@ from __future__ import annotations
 import hashlib
 import os
 import time
+from urllib.parse import urlparse
 
 import httpx
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
+
+if SUPABASE_URL:
+    _parsed = urlparse(SUPABASE_URL)
+    _local_host = _parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+    if _parsed.scheme not in {"http", "https"} or not _parsed.netloc:
+        raise RuntimeError("SUPABASE_URL must be a valid http(s) URL.")
+    if _parsed.scheme != "https" and not _local_host:
+        raise RuntimeError(
+            "SUPABASE_URL must use HTTPS outside local development."
+        )
 
 _TRUTHY = {"1", "true", "yes", "on"}
 # Off by default only when Supabase is not configured, so local development
@@ -41,7 +52,11 @@ def bearer_token(header: str | None) -> str | None:
     if scheme.lower() != "bearer":
         return None
     token = value.strip()
-    return token or None
+    # Supabase JWTs are much shorter than this. The cap keeps a hostile header
+    # from turning the auth cache key/hash or the upstream request into a DoS.
+    if not token or len(token) > 8_192:
+        return None
+    return token
 
 
 def _cache_key(token: str) -> str:
@@ -86,7 +101,7 @@ async def user_id_for_token(token: str) -> tuple[str | None, str | None]:
         headers["apikey"] = SUPABASE_ANON_KEY
 
     try:
-        async with httpx.AsyncClient(timeout=6.0) as client:
+        async with httpx.AsyncClient(timeout=6.0, follow_redirects=False) as client:
             response = await client.get(
                 f"{SUPABASE_URL}/auth/v1/user", headers=headers
             )

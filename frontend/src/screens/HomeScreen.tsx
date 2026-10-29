@@ -13,16 +13,20 @@ import { TaskRow } from '../components/TaskRow';
 import {
   Button,
   Card,
+  Label,
   Meter,
   Section,
   Segmented,
 } from '../components/ui';
 import {
+  daysUntil,
+  dueDateLabel,
   fmtDuration,
   fmtTime,
   greeting,
   realityCheck,
   sortedTasks,
+  upcomingTasks,
 } from '../lib/engine';
 import { useVoiceInput } from '../lib/useVoiceInput';
 import { useApp } from '../state';
@@ -54,6 +58,7 @@ export function HomeScreen() {
     .filter((task) => !task.done)
     .slice(0, 3);
   const next = upNext[0];
+  const upcoming = upcomingTasks(state.tasks, 3);
 
   const submit = () => {
     if (!text.trim()) return;
@@ -347,6 +352,70 @@ export function HomeScreen() {
         )}
       </Section>
 
+      {upcoming.length ? (
+        <>
+          <Label>Upcoming</Label>
+          <View style={styles.upcomingList}>
+            {upcoming.map((task) => {
+              const left = task.dueDate ? daysUntil(task.dueDate) : 0;
+              const meta =
+                left <= 0
+                  ? 'Due today'
+                  : left === 1
+                    ? 'Due tomorrow'
+                    : `${dueDateLabel(task.dueDate ?? '')} · ${left} days left`;
+              return (
+                <Pressable
+                  key={task.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit ${task.title}, due ${dueDateLabel(
+                    task.dueDate ?? '',
+                  )}`}
+                  onPress={() => openTaskSheet(task.id)}
+                  style={({ pressed }) => [
+                    styles.upcomingCard,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.line,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.upcomingIcon,
+                      { backgroundColor: colors.accent },
+                    ]}
+                  >
+                    <Icon
+                      name="calendar-outline"
+                      size={18}
+                      color={colors.onAccent}
+                    />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text
+                      style={[styles.upcomingTitle, { color: colors.ink }]}
+                      numberOfLines={2}
+                    >
+                      {task.title}
+                    </Text>
+                    <Text style={[styles.upcomingMeta, { color: colors.brand }]}>
+                      {meta}
+                    </Text>
+                  </View>
+                  <Icon
+                    name="chevron-forward"
+                    size={17}
+                    color={colors.muted}
+                  />
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      ) : null}
+
       {state.nudges ? (
         <Section label="A gentle nudge">
           <Card style={styles.nudgeCard}>
@@ -524,6 +593,37 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 10,
+  },
+  upcomingList: {
+    gap: 8,
+  },
+  upcomingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    minHeight: 64,
+  },
+  upcomingIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upcomingTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  upcomingMeta: {
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
   },
   emptyState: {
     alignItems: 'center',

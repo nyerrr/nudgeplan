@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   applyCheckIn,
   createTask,
+  dueDateLabel,
   fmtTimer,
   generateSteps,
   initialState,
@@ -10,6 +11,9 @@ import {
   parseClock,
   planTasks,
   slotWindow,
+  todayIso,
+  upcomingTasks,
+  validIsoDate,
 } from './engine.js';
 
 describe('engine helpers', () => {
@@ -66,6 +70,61 @@ describe('engine helpers', () => {
     expect(steps).toHaveLength(5);
     expect(steps.every((step) => step.done === false)).toBe(true);
     expect(steps.every((step) => step.min > 0)).toBe(true);
+  });
+
+  it('keeps step timers inside the task budget', () => {
+    const steps = generateSteps('Draft the project proposal', 15);
+
+    expect(steps).toHaveLength(5);
+    expect(steps[0].min).toBeLessThanOrEqual(5);
+    expect(steps.every((step) => step.min >= 1)).toBe(true);
+    expect(steps.reduce((sum, step) => sum + step.min, 0)).toBeLessThanOrEqual(
+      15,
+    );
+  });
+
+  it('keeps an explicit deadline out of the task title', () => {
+    const result = parseBrainDump(
+      'I have a chemistry exam on November 5 and need to review chapter 4',
+    );
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].dueDate).toMatch(/-11-05$/);
+    expect(result.items[0].title.toLowerCase()).not.toContain('november');
+  });
+
+  it('validates dates and surfaces only real future deadlines', () => {
+    expect(validIsoDate('2026-02-29')).toBeNull();
+    expect(validIsoDate('2026-12-15')).toBe('2026-12-15');
+    expect(dueDateLabel(todayIso(0))).toBe('Today');
+
+    const exam = createTask(
+      'Review chemistry notes',
+      30,
+      'high',
+      'today',
+      3,
+      null,
+      false,
+      [],
+      false,
+      todayIso(9),
+    );
+    const done = createTask(
+      'Finished prep',
+      20,
+      'med',
+      'today',
+      2,
+      null,
+      false,
+      [],
+      true,
+      todayIso(3),
+    );
+    const noDate = createTask('Loose task', 20, 'med', 'today');
+
+    expect(upcomingTasks([done, noDate, exam])).toEqual([exam]);
   });
 });
 

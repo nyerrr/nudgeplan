@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -19,6 +20,7 @@ import {
   fmtDuration,
   fmtTime,
   parseClock,
+  validIsoDate,
 } from '../lib/engine';
 import { useApp } from '../state';
 import { fonts, type } from '../theme';
@@ -51,6 +53,7 @@ export function TaskSheet() {
   const [day, setDay] = useState<Day>('today');
   const [priority, setPriority] = useState<1 | 2 | 3>(2);
   const [startText, setStartText] = useState('');
+  const [dueText, setDueText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -65,6 +68,7 @@ export function TaskSheet() {
     setStartText(
       task?.fixed && task?.start != null ? clockFromMinutes(task.start) : '',
     );
+    setDueText(task?.dueDate ?? '');
     setError(null);
     setWorking(false);
     setConfirmingDelete(false);
@@ -83,6 +87,11 @@ export function TaskSheet() {
       setError('Use a time like 14:30 or 6pm.');
       return;
     }
+    const dueDate = dueText.trim() ? validIsoDate(dueText) : null;
+    if (dueText.trim() && dueDate == null) {
+      setError('Use a deadline like 2026-11-05.');
+      return;
+    }
     saveTask({
       id: task?.id ?? null,
       title: clean,
@@ -91,6 +100,7 @@ export function TaskSheet() {
       day,
       pri: priority,
       start,
+      dueDate,
     });
   };
 
@@ -102,6 +112,30 @@ export function TaskSheet() {
     closeTaskSheet();
     go('focus');
     notify(`Split into ${count} small steps.`);
+  };
+
+  const addToCalendar = () => {
+    const dueDate = validIsoDate(dueText);
+    if (!dueDate) {
+      setError('Add a deadline like 2026-11-05 first.');
+      return;
+    }
+    const [year, month, day] = dueDate.split('-').map(Number);
+    const start = `${year}${String(month).padStart(2, '0')}${String(day).padStart(2, '0')}`;
+    const next = new Date(year, month - 1, day + 1);
+    const end = `${next.getFullYear()}${String(next.getMonth() + 1).padStart(
+      2,
+      '0',
+    )}${String(next.getDate()).padStart(2, '0')}`;
+    const label = title.trim() || 'NudgePlan deadline';
+    const url =
+      'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+      `&text=${encodeURIComponent(label)}` +
+      `&dates=${start}/${end}` +
+      `&details=${encodeURIComponent('Deadline from NudgePlan')}`;
+    void Linking.openURL(url).catch(() =>
+      notify('Could not open your calendar.', true),
+    );
   };
 
   const confirmDelete = () => {
@@ -277,6 +311,44 @@ export function TaskSheet() {
                 value={day}
                 onChange={setDay}
               />
+
+              <Text style={[styles.fieldLabel, { color: colors.muted }]}>
+                Deadline (optional)
+              </Text>
+              <TextInput
+                value={dueText}
+                onChangeText={setDueText}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.muted}
+                selectionColor={colors.brand}
+                autoCapitalize="none"
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.line,
+                    color: colors.ink,
+                  },
+                ]}
+              />
+              <Text
+                style={[
+                  type.hint,
+                  { color: colors.muted, marginTop: 8, fontFamily: fonts.regular },
+                ]}
+              >
+                Use this for an exam, appointment, or other fixed date.
+              </Text>
+              {validIsoDate(dueText) ? (
+                <Button
+                  small
+                  ghost
+                  icon="calendar-outline"
+                  label="Add to calendar"
+                  onPress={addToCalendar}
+                  style={{ alignSelf: 'flex-start', marginTop: 8 }}
+                />
+              ) : null}
 
               <Text style={[styles.fieldLabel, { color: colors.muted }]}>
                 Priority

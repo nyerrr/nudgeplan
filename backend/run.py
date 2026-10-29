@@ -20,6 +20,14 @@ load_dotenv()
 PORT = int(os.getenv("PORT", "8001"))
 HOST = os.getenv("HOST", "127.0.0.1")
 API_AUTH_TOKEN = os.getenv("API_AUTH_TOKEN", "").strip()
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
+AUTH_REQUIRED = os.getenv("AUTH_REQUIRED", "true").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 def _is_loopback(host: str) -> bool:
@@ -29,10 +37,13 @@ def _is_loopback(host: str) -> bool:
 def main() -> int:
     reload_flag = "--reload" in sys.argv
 
-    if not _is_loopback(HOST) and not API_AUTH_TOKEN:
+    if not _is_loopback(HOST) and not API_AUTH_TOKEN and not (
+        SUPABASE_URL and SUPABASE_ANON_KEY and AUTH_REQUIRED
+    ):
         print(
-            "[ERROR] HOST is not loopback, but API_AUTH_TOKEN is not configured. "
-            "Set a strong token before exposing the API."
+            "[ERROR] HOST is not loopback, but no authentication is configured. "
+            "Set SUPABASE_URL/SUPABASE_ANON_KEY with AUTH_REQUIRED=true "
+            "(recommended), or a strong API_AUTH_TOKEN."
         )
         return 1
 

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 
 import { Icon } from '../components/Icon';
-import { Button, Card, Empty, Meter, Section } from '../components/ui';
+import { Button, Card, Empty, Label, Meter, Section } from '../components/ui';
 import {
   fmtDuration,
   fmtTimer,
@@ -45,7 +45,6 @@ export function FocusScreen() {
     id: string;
     title: string;
   } | null>(null);
-  const [showSteps, setShowSteps] = useState(false);
 
   const candidates = sortedTasks(state.tasks, 'today').filter(
     (task) => !task.done,
@@ -383,9 +382,19 @@ export function FocusScreen() {
             )}
           </Card>
 
-          {selected.steps.length && currentStep ? (
+          {selected.steps.length ? (
             <>
-              <Card style={[styles.timerCard, { marginTop: 12, borderColor: colors.brand, borderWidth: 1.5 }]}>
+              {currentStep ? (
+                <Card
+                  style={[
+                    styles.timerCard,
+                    {
+                      marginTop: 12,
+                      borderColor: colors.brand,
+                      borderWidth: 1.5,
+                    },
+                  ]}
+                >
                 <Text
                   style={[
                     type.sub,
@@ -467,21 +476,14 @@ export function FocusScreen() {
                   style={{ alignSelf: 'center', marginTop: 12 }}
                 />
               </Card>
+              ) : null}
 
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ expanded: showSteps }}
-                onPress={() => setShowSteps((value) => !value)}
-                style={styles.stepsToggle}
-              >
-                <Text style={{ color: colors.muted, fontFamily: fonts.semibold, fontSize: 13 }}>
-                  {showSteps ? 'Hide all steps' : `View all steps (${selected.steps.length})`}
-                </Text>
-                <Icon name={showSteps ? 'chevron-up' : 'chevron-down'} size={15} color={colors.brand} />
-              </Pressable>
-              {showSteps ? <View style={styles.steps}>
+              <Label style={{ marginTop: 18, marginBottom: 8 }}>
+                All steps
+              </Label>
+              <View style={styles.steps}>
                 {selected.steps.map((step) => {
-                  const current = step.id === currentStep.id;
+                  const current = currentStep?.id === step.id;
                   return (
                     <View
                       key={step.id}
@@ -547,7 +549,7 @@ export function FocusScreen() {
                     </View>
                   );
                 })}
-              </View> : null}
+              </View>
 
               <View style={styles.addRow}>
                 <TextInput
@@ -653,15 +655,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 8,
     marginTop: 10,
-  },
-  stepsToggle: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 18,
-    marginBottom: 8,
-    paddingVertical: 4,
   },
   pickerOption: {
     flexDirection: 'row',

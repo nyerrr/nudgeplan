@@ -58,6 +58,7 @@ export async function upsertTasks(userId: string, tasks: Task[]) {
     start: task.start,
     fixed: task.fixed,
     done: task.done,
+    due_date: task.dueDate,
     position: i,
     completed_at: task.done ? new Date().toISOString() : null,
     updated_at: new Date().toISOString(),
@@ -159,6 +160,7 @@ export function reconstructFromRemote(remote: RemoteData, baseState: AppState): 
       start: t.start,
       fixed: t.fixed,
       done: t.done,
+      dueDate: t.due_date ?? null,
       steps: stepsByTask.get(t.id) || [],
     }));
 

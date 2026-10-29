@@ -9,6 +9,7 @@ Usage:
 
 import json
 import sys
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 import main
@@ -31,7 +32,11 @@ class FakeClient:
         self.models = FakeModels(payload)
 
 
-def call_api(raw: str):
+def call_api(
+    raw: str,
+    path: str = "/ai/plan",
+    body: dict | None = None,
+):
     fake = FakeClient(raw)
     main.client = fake
     # The offline planner short-circuits before the Gemini client, so force the
@@ -42,7 +47,7 @@ def call_api(raw: str):
     from fastapi.testclient import TestClient
 
     with TestClient(main.app) as client:
-        res = client.post("/ai/plan", json={"text": "Finish report, laundry, gym"})
+        res = client.post(path, json=body or {"text": "Finish report, laundry, gym"})
 
     return res, fake
 
@@ -265,6 +270,157 @@ def test_offline_planner() -> None:
     print("[OK] offline planner: " + ", ".join(f"{t['title']} ({t['minutes']}m)" for t in tasks))
 
 
+def test_checkin_contract() -> None:
+    due = (date.today() + timedelta(days=9)).isoformat()
+    payload = json.dumps(
+        {
+            "tasks": [
+                {
+                    "title": "Review chemistry notes",
+                    "minutes": 30,
+                    "energy": "high",
+                    "priority": "high",
+                    "due": due,
+                    "start": "18:00",
+                    "steps": ["Open the notes", "Review one chapter"],
+                },
+                {
+                    "title": "Walk for 10 minutes",
+                    "minutes": 10,
+                    "energy": "low",
+                    "priority": "medium",
+                    "due": "today",
+                    "start": None,
+                    "steps": ["Put shoes on", "Walk"],
+                },
+            ],
+            "breakdown": "Protect a small study block today.",
+        }
+    )
+    res, _ = call_api(
+        payload,
+        path="/plan/checkin",
+        body={
+            "text": "I'm tired but have a chemistry exam in 9 days at 6pm.",
+            "energy": "medium",
+            "start_h": 9,
+            "end_h": 18,
+        },
+    )
+    expect(res.status_code == 200, f"check-in failed: {res.text}")
+    body = res.json()
+    expect(body["source"] == "gemini", "live path should report gemini")
+    expect(body["energy"] == "low", "tired should lower detected energy")
+    expect(len(body["items"]) == 2, "expected two check-in items")
+    first = body["items"][0]
+    expect(first["dueDate"] == due, f"dueDate not preserved: {first['dueDate']}")
+    expect(first["start"] == 18 * 60, f"fixed time not converted: {first['start']}")
+    expect(first["fixed"] is True, "a start time should be fixed")
+    expect(first["dur"] == 30, "minutes should map to dur")
+    expect(first["effort"] == "high", "energy should map to effort")
+    expect(first["pri"] == 3, "priority should map to 1-3")
+    expect(len(first["steps"]) == 2, "steps should be returned")
+    expect(all(step["min"] > 0 for step in first["steps"]), "steps need timers")
+    expect(
+        body["items"][1]["dueDate"] is None,
+        "today/tomorrow scheduling should not become a deadline badge",
+    )
+    print("[OK] check-in contract: due date, fixed time, and task shape preserved")
+
+
+def test_steps_guard() -> None:
+    payload = json.dumps(
+        {
+            "steps": [
+                {"text": "Start working on it", "minutes": 30},
+                {"text": "Open the notes at chapter 4", "minutes": 30},
+                {"text": "Write one question you cannot answer", "minutes": 5},
+            ]
+        }
+    )
+    res, _ = call_api(
+        payload,
+        path="/plan/steps",
+        body={"title": "Study for the chemistry exam", "effort": "high", "dur": 90},
+    )
+    expect(res.status_code == 200, f"steps failed: {res.text}")
+    body = res.json()
+    expect(body["source"] == "gemini", "live steps should report gemini")
+    steps = body["steps"]
+    expect(3 <= len(steps) <= 5, f"expected 3-5 steps, got {len(steps)}")
+    expect(steps[0]["min"] <= 10, f"first step is too long: {steps[0]}")
+    expect(
+        not steps[0]["text"].lower().startswith("start working"),
+        f"vague first step survived: {steps[0]}",
+    )
+    expect(all(step["min"] <= 20 for step in steps), "steps must stay short")
+    expect(
+        sum(step["min"] for step in steps) <= 90,
+        "step timers must fit inside the task duration",
+    )
+    print(f"[OK] steps guard: {[step['text'] for step in steps]}")
+
+
+def test_step_timers_fit_budget() -> None:
+    steps = main._steps_from_texts(
+        [
+            "Open a blank message or note pad",
+            "Write a greeting to Alex",
+            "Draft the appreciation message",
+            "Review the written note",
+            "Send or deliver the note",
+        ],
+        15,
+    )
+    expect(steps[0].min <= 5, "first step must stay quick")
+    expect(all(step.min >= 1 for step in steps), "steps need a real timer")
+    expect(
+        sum(step.min for step in steps) <= 15,
+        f"step timers exceed the 15-minute task: {[step.min for step in steps]}",
+    )
+    print(f"[OK] step timers fit: {[step.min for step in steps]} inside 15m")
+
+
+def test_offline_checkin_and_steps() -> None:
+    main.MOCK = True
+    main.HAS_REAL_KEY = False
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.app) as client:
+        checkin = client.post(
+            "/plan/checkin",
+            json={
+                "text": "I have a chemistry exam on November 5 and need to study",
+                "energy": "medium",
+                "start_h": 9,
+                "end_h": 18,
+            },
+        )
+        steps = client.post(
+            "/plan/steps",
+            json={"title": "Study for the chemistry exam", "effort": "high", "dur": 90},
+        )
+
+    expect(checkin.status_code == 200, f"offline check-in failed: {checkin.text}")
+    body = checkin.json()
+    expect(body["source"] == "offline", "offline check-in should report offline")
+    expect(body["items"], "offline check-in returned no tasks")
+    expected_nov5 = date(date.today().year, 11, 5)
+    if expected_nov5 < date.today():
+        expected_nov5 = date(date.today().year + 1, 11, 5)
+    expect(
+        body["items"][0]["dueDate"] == expected_nov5.isoformat(),
+        f"November 5 was lost: {body['items'][0]['dueDate']}",
+    )
+
+    expect(steps.status_code == 200, f"offline steps failed: {steps.text}")
+    step_body = steps.json()
+    expect(step_body["source"] == "offline", "offline steps should report offline")
+    expect(len(step_body["steps"]) >= 3, "offline breakdown is too short")
+    expect(step_body["steps"][0]["min"] <= 10, "offline first step is too long")
+    print("[OK] offline check-in and steps: dates and micro-steps still work")
+
+
 def main_check() -> int:
     test_clean_json()
     test_markdown_fence()
@@ -276,6 +432,10 @@ def main_check() -> int:
     test_past_due_date_dropped()
     test_prompt_includes_today()
     test_offline_planner()
+    test_checkin_contract()
+    test_steps_guard()
+    test_step_timers_fit_budget()
+    test_offline_checkin_and_steps()
 
     print("\n[OK] All pipeline cases passed.")
     return 0

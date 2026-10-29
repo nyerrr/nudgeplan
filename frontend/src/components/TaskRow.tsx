@@ -9,7 +9,7 @@ import {
 
 import { useApp } from '../state';
 import { fonts, elevationStyle, type } from '../theme';
-import { fmtDuration, fmtTime } from '../lib/engine';
+import { dueDateLabel, fmtDuration, fmtTime } from '../lib/engine';
 import type { Task } from '../types';
 import { Icon } from './Icon';
 import { EffortPill } from './ui';
@@ -109,6 +109,16 @@ export function TaskRow({
             {task.steps.length ? (
               <Text style={[styles.metaText, { color: colors.muted }]}>
                 {doneSteps}/{task.steps.length} steps
+              </Text>
+            ) : null}
+            {task.dueDate ? (
+              <Text
+                style={[
+                  styles.metaText,
+                  { color: colors.brand, fontFamily: fonts.semibold },
+                ]}
+              >
+                Due {dueDateLabel(task.dueDate)}
               </Text>
             ) : null}
           </View>

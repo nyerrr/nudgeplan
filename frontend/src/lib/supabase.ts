@@ -12,7 +12,28 @@ import { Platform } from 'react-native';
 const url = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
 const anonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
 
-export const SUPABASE_CONFIGURED = url.length > 0 && anonKey.length > 0;
+function isSecureSupabaseUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return (
+      parsed.protocol === 'https:' ||
+      ['localhost', '127.0.0.1', '::1', '[::1]'].includes(parsed.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Fail closed: a plaintext Supabase URL would leak access tokens. Local
+// development is still allowed over loopback HTTP.
+export const SUPABASE_CONFIGURED =
+  url.length > 0 && anonKey.length > 0 && isSecureSupabaseUrl(url);
+
+if (url && anonKey && !SUPABASE_CONFIGURED) {
+  console.error(
+    'Supabase is disabled: EXPO_PUBLIC_SUPABASE_URL must use HTTPS outside local development.',
+  );
+}
 
 export const supabase: SupabaseClient | null = SUPABASE_CONFIGURED
   ? createClient(url, anonKey, {

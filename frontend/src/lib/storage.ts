@@ -44,6 +44,11 @@ function normaliseTask(raw: unknown): Task | null {
     start: typeof task.start === 'number' ? task.start : null,
     fixed: Boolean(task.fixed),
     done: Boolean(task.done),
+    dueDate:
+      typeof task.dueDate === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate)
+        ? task.dueDate
+        : null,
     steps: steps
       .filter((step): step is Record<string, unknown> => !!step && typeof step === 'object')
       .map((step, index) => ({

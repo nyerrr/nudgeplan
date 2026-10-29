@@ -24,13 +24,14 @@ shared by the backend and the mobile client.
 | **Sign-in** | Real Supabase Google/email sign-in with guest skip, persisted session, and sign-out from Profile |
 | **About** | Product story, problem/solution, audience, roadmap, and team |
 
-The current prototype keeps its plan in on-device storage, scoped to the
-signed-in user. Cross-device sync is not implemented yet.
+Signed-in plans sync to Supabase and are cached on-device for offline use.
+Guest plans stay device-local. See `supabase_setup.sql` for the required
+Row Level Security policies.
 
 ## Deployment
 
 See [DEPLOY.md](DEPLOY.md) for the Render backend, the Supabase redirect
-setup, and building a shareable APK with EAS.
+setup, and building a shareable Android APK or installable iPhone app with EAS.
 
 ## Architecture
 
@@ -95,9 +96,10 @@ python run.py
 
 Use `python run.py --reload` for auto-reload during development.
 
-`backend/.env.example` ships with `GEMINI_MOCK=true`, so it works with **no API key**.
-To use real AI later, get a free key at https://aistudio.google.com/apikey,
-paste it into `GEMINI_API_KEY`, and set `GEMINI_MOCK=false`.
+With no `GEMINI_API_KEY`, the backend automatically uses the offline planner, so
+it works **without a key**. To use real AI, get a free key at
+https://aistudio.google.com/apikey, paste it into `GEMINI_API_KEY`, and set
+`GEMINI_MOCK=false`.
 
 ### 2. Frontend (Terminal 2)
 
@@ -155,9 +157,14 @@ npm run export:web
 | ------ | ---- | ----------- |
 | GET | `/health` | Health + active model/mode |
 | POST | `/ai/plan` | Brain dump -> validated tasks and micro-steps |
+| POST | `/plan/checkin` | Brain dump -> app task shape with deadlines |
+| POST | `/plan/steps` | One task -> guarded micro-steps |
 
-See `backend/README.md` for request/response examples and
-`frontend/README.md` for the route and state details.
+`/ai/*` and `/plan/*` are protected. In production the app sends a Supabase
+user token; locally, without Supabase configured, the API stays open for
+development. See [`SECURITY-REVIEW.md`](SECURITY-REVIEW.md) for the current
+threat model and deployment checklist, `backend/README.md` for request/response
+examples, and `frontend/README.md` for the route and state details.
 
 ## Troubleshooting
 

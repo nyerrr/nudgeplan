@@ -135,11 +135,11 @@ const STEP_SETS: Array<{ re: RegExp; steps: Array<[string, number]> }> = [
 ];
 
 const GENERIC_STEPS: Array<[string, number]> = [
-  ['Write what done looks like in one line', 2],
-  ['Gather what you need in one place', 5],
-  ['Work for 10 minutes only', 10],
-  ['Take a 2 minute break', 2],
-  ['Do one more 10 minute round', 10],
+  ['Open the file, app, or place where this task happens', 2],
+  ['Put the one thing you need in front of you', 3],
+  ['Set a 10 minute timer', 1],
+  ['Do the smallest visible piece for 10 minutes', 10],
+  ['Stop and write down what is next', 2],
 ];
 
 export const DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240];
@@ -169,6 +169,149 @@ export function todayIso(offset = 0): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+export function validIsoDate(value: string): string | null {
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(year, month - 1, day);
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+export function dueDateLabel(iso: string): string {
+  const clean = validIsoDate(iso);
+  if (!clean) return iso;
+  if (clean === todayIso(0)) return 'Today';
+  if (clean === todayIso(1)) return 'Tomorrow';
+  const [year, month, day] = clean.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+export function daysUntil(iso: string): number {
+  const clean = validIsoDate(iso);
+  if (!clean) return 0;
+  const [year, month, day] = clean.split('-').map(Number);
+  const target = new Date(year, month - 1, day);
+  target.setHours(0, 0, 0, 0);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.round((target.getTime() - now.getTime()) / 86_400_000);
+}
+
+export function upcomingTasks(tasks: Task[], limit = 4): Task[] {
+  const tomorrow = todayIso(1);
+  return tasks
+    .filter((task) => !task.done && task.dueDate && task.dueDate > tomorrow)
+    .sort(
+      (a, b) =>
+        (a.dueDate ?? '').localeCompare(b.dueDate ?? '') || a.pri - b.pri,
+    )
+    .slice(0, limit);
+}
+
+const MONTH_INDEX: Record<string, number> = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
+};
+const MONTH_PATTERN =
+  'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
+const MONTH_FIRST = new RegExp(
+  `\\b(${MONTH_PATTERN})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{4}))?\\b`,
+  'i',
+);
+const DAY_FIRST = new RegExp(
+  `\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${MONTH_PATTERN})(?:,?\\s*(\\d{4}))?\\b`,
+  'i',
+);
+const ISO_DATE = /\b(\d{4})-(\d{2})-(\d{2})\b/;
+
+function isoForMonthDay(
+  month: number,
+  day: number,
+  yearText?: string,
+): string | null {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let year = yearText ? Number(yearText) : now.getFullYear();
+  let candidate = new Date(year, month, day);
+  if (candidate.getMonth() !== month || candidate.getDate() !== day) return null;
+  if (!yearText && candidate < today) {
+    year += 1;
+    candidate = new Date(year, month, day);
+  }
+  if (candidate < today) return null;
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** Find a real calendar date in a sentence, and return the sentence without it. */
+export function detectDueDate(
+  text: string,
+): { iso: string; rest: string } | null {
+  let matched = '';
+  let iso: string | null = null;
+
+  const isoMatch = text.match(ISO_DATE);
+  if (isoMatch) {
+    const candidate = validIsoDate(isoMatch[0]);
+    if (candidate && candidate >= todayIso(0)) {
+      matched = isoMatch[0];
+      iso = candidate;
+    }
+  }
+
+  if (!iso) {
+    const monthFirst = text.match(MONTH_FIRST);
+    if (monthFirst) {
+      const month = MONTH_INDEX[monthFirst[1].slice(0, 3).toLowerCase()];
+      if (month != null) {
+        iso = isoForMonthDay(month, Number(monthFirst[2]), monthFirst[3]);
+        matched = monthFirst[0];
+      }
+    }
+  }
+
+  if (!iso) {
+    const dayFirst = text.match(DAY_FIRST);
+    if (dayFirst) {
+      const month = MONTH_INDEX[dayFirst[2].slice(0, 3).toLowerCase()];
+      if (month != null) {
+        iso = isoForMonthDay(month, Number(dayFirst[1]), dayFirst[3]);
+        matched = dayFirst[0];
+      }
+    }
+  }
+
+  if (!iso || !matched) return null;
+  const rest = text
+    .replace(matched, ' ')
+    .replace(/\b(?:on|by|due|before|until)\s+(?=(?:and|then|,|$))/i, ' ')
+    .replace(/\b(?:on|by|due|before|until)\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { iso, rest };
 }
 
 export function dayLabel(offset: number): string {
@@ -287,6 +430,7 @@ export function createTask(
   fixed = false,
   steps: Step[] = [],
   done = false,
+  dueDate: string | null = null,
 ): Task {
   return {
     id: newId(),
@@ -299,6 +443,7 @@ export function createTask(
     fixed,
     done,
     steps,
+    dueDate,
   };
 }
 
@@ -698,13 +843,31 @@ export function sortedTasks(tasks: Task[], day: Day): Task[] {
 // Micro-Step Guard
 // ---------------------------------------------------------------------------
 
-export function generateSteps(title: string): Step[] {
+function fitStepMinutes(steps: Array<[string, number]>, dur: number): number[] {
+  const raw = steps.map(([, min]) => min);
+  const budget = Math.max(Math.round(dur), steps.length, 1);
+  if (raw.reduce((sum, min) => sum + min, 0) <= budget) return raw;
+  const scale = budget / raw.reduce((sum, min) => sum + min, 0);
+  const fitted = raw.map((min) => Math.max(1, Math.round(min * scale)));
+  while (fitted.reduce((sum, min) => sum + min, 0) > budget) {
+    const index = fitted.reduce(
+      (largest, min, at) => (min > fitted[largest] ? at : largest),
+      0,
+    );
+    if (fitted[index] <= 1) break;
+    fitted[index] -= 1;
+  }
+  return fitted;
+}
+
+export function generateSteps(title: string, dur = 45): Step[] {
   const chosen =
     STEP_SETS.find((set) => set.re.test(title))?.steps ?? GENERIC_STEPS;
-  return chosen.map(([text, min]) => ({
+  const minutes = fitStepMinutes(chosen, dur);
+  return chosen.map(([text], index) => ({
     id: newId('s'),
     text,
-    min,
+    min: minutes[index],
     done: false,
   }));
 }
@@ -773,6 +936,14 @@ export function parseBrainDump(text: string): {
       rest = rest.replace(durationMatch[0], ' ');
     }
 
+    let dueDate: string | null = null;
+    const detectedDate = detectDueDate(rest);
+    if (detectedDate) {
+      dueDate = detectedDate.iso;
+      rest = detectedDate.rest;
+      day = dueDate === todayIso(1) ? 'tomorrow' : 'today';
+    }
+
     let title = rest
       .replace(/\b(tomorrow|today)\b/gi, ' ')
       .replace(STUCK_PHRASES, ' ');
@@ -804,7 +975,7 @@ export function parseBrainDump(text: string): {
         ? 1
         : 2;
 
-    const steps = stuck ? generateSteps(title) : [];
+    const steps = stuck ? generateSteps(title, duration ?? 45) : [];
     items.push(
       createTask(
         title,
@@ -815,6 +986,8 @@ export function parseBrainDump(text: string): {
         start,
         start != null,
         steps,
+        false,
+        dueDate,
       ),
     );
   });
@@ -918,6 +1091,7 @@ function toTask(item: ParsedTask): Task {
       min: step.min,
       done: step.done ?? false,
     })),
+    dueDate: item.dueDate ?? null,
   };
 }
 
@@ -958,6 +1132,8 @@ export function applyCheckIn(
     state.endH,
     energy,
   );
+  const plannedById = new Map(tasks.map((task) => [task.id, task]));
+  const addedPlanned = added.map((task) => plannedById.get(task.id) ?? task);
   const pct = Math.round(
     (plannedMinutes(tasks, 'today') /
       availableMinutes(state.startH, state.endH, energy)) *
@@ -979,14 +1155,21 @@ export function applyCheckIn(
     }
   }
 
-  const stuck = added.find((task) => task.steps.length);
+  const stuck = addedPlanned.find((task) => task.steps.length);
   if (stuck) {
     lines.push(`I split "${stuck.title}" into ${stuck.steps.length} small steps.`);
   }
 
+  const future = addedPlanned.find(
+    (task) => task.dueDate && task.dueDate > todayIso(1),
+  );
+  if (future?.dueDate) {
+    lines.push(`Deadline noted: ${dueDateLabel(future.dueDate)}.`);
+  }
+
   const cta: ChatCta[] = [];
   if (stuck) cta.push({ label: 'Open focus', act: 'focus' });
-  if (added.some((task) => task.day === 'today') || parsed.energy) {
+  if (addedPlanned.some((task) => task.day === 'today') || parsed.energy) {
     if (pct > 100) {
       const moves = movesNeeded({ ...state, tasks, energy });
       lines.push(
@@ -1013,14 +1196,16 @@ export function applyCheckIn(
     id: newId('m'),
     from: 'bot',
     text: lines.join('\n'),
-    tasks: added.map((task) => ({
+    tasks: addedPlanned.map((task) => ({
       title: task.title,
       when:
-        task.day === 'tomorrow'
-          ? `Tomorrow${task.start != null ? ` ${fmtTime(task.start)}` : ''}`
-          : task.start == null
-            ? 'Needs room'
-            : fmtTime(task.start),
+        task.dueDate && task.dueDate > todayIso(1)
+          ? `Due ${dueDateLabel(task.dueDate)}`
+          : task.day === 'tomorrow'
+            ? `Tomorrow${task.start != null ? ` ${fmtTime(task.start)}` : ''}`
+            : task.start == null
+              ? 'Needs room'
+              : fmtTime(task.start),
     })),
     cta,
   };

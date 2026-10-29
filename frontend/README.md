@@ -85,7 +85,14 @@ Find your LAN IP with `ipconfig` (look for IPv4 Address).
 | Web / iOS simulator | `http://localhost:8001` |
 | Android emulator    | `http://10.0.2.2:8001`  |
 
-`EXPO_PUBLIC_API_URL` overrides all of these.
+`EXPO_PUBLIC_API_URL` overrides all of these. Live Gemini responses can take
+longer than a local parse, so requests wait up to 60 seconds by default. Set
+`EXPO_PUBLIC_API_TIMEOUT_MS` if you need a different budget.
+
+API and Supabase URLs must use HTTPS outside loopback development. Never put
+`GEMINI_API_KEY`, `API_AUTH_TOKEN`, or any other backend secret in an
+`EXPO_PUBLIC_*` variable: Expo inlines those values into the JavaScript bundle.
+AI requests authenticate with the signed-in user's Supabase access token.
 
 ## Current features
 
@@ -95,16 +102,16 @@ Find your LAN IP with `ipconfig` (look for IPv4 Address).
 - Profile and About screens reachable from Home and Profile
 - Custom state-based tab navigator (no react-navigation dependency)
 
-### Sign-in (preview)
+### Sign-in
 
 - First launch shows a login screen with Google, email magic-link, and
   "Continue without an account"
-- Sessions persist locally, and Profile shows the current account with sign-out
-- Google and email are simulated until an auth provider is connected; the UI
-  already talks to a small adapter in `src/lib/auth.ts`
-- Add `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` to `.env`
-  when wiring Supabase later, then replace the demo adapter functions
+- Signed-in sessions persist through Supabase; guest sessions stay local
+- Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `.env`
+  to enable real auth. Without them the app runs in local demo/guest mode.
 - Guest mode keeps the app fully offline and usable without an account
+- The Supabase anon key is public by design. Row Level Security, not secrecy,
+  protects user rows; run `supabase_setup.sql` before deploying.
 
 ### Home
 
@@ -112,6 +119,7 @@ Find your LAN IP with `ipconfig` (look for IPv4 Address).
 - Reality Check card: planned vs. open time, capacity %, move/keep actions
 - Low/Medium/High energy selector that re-runs the schedule
 - Up-next task list with inline completion
+- Upcoming deadlines after tomorrow, with days-left labels for exams and fixed dates
 - Nudge card with "Start now" and "Later" actions
 
 ### Plan
@@ -121,7 +129,7 @@ Find your LAN IP with `ipconfig` (look for IPv4 Address).
 - Peak-hour hint that counts high-effort tasks placed in the peak
 - Timeline of scheduled tasks and a "Needs room" section
 - Task sheet for create/edit/delete, including duration, effort, day, priority,
-  optional fixed start time, and "Break into steps"
+  optional fixed start time, deadline, "Add to calendar", and "Break into steps"
 
 ### Check-in
 

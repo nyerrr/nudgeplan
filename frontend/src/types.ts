@@ -32,6 +32,8 @@ export interface Task {
   fixed: boolean;
   done: boolean;
   steps: Step[];
+  /** ISO calendar deadline, when the task is tied to a real date. */
+  dueDate: string | null;
 }
 
 export interface ParsedStep {
@@ -53,6 +55,7 @@ export interface ParsedTask {
   done?: boolean;
   stuck?: boolean;
   steps?: ParsedStep[];
+  dueDate?: string | null;
 }
 
 export interface ParsedCheckIn {
@@ -144,6 +147,7 @@ export interface TaskDraft {
   day: Day;
   pri: 1 | 2 | 3;
   start: number | null;
+  dueDate: string | null;
 }
 
 export interface TimerState {

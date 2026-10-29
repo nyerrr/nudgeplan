@@ -409,6 +409,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setAiStatus(health ? 'online' : 'offline');
   }, []);
 
+  const recordAi = useCallback(
+    (source?: 'gemini' | 'offline', model?: string | null) => {
+      if (source === 'gemini') {
+        setAiStatus('online');
+        if (model) {
+          setAiInfo((current) =>
+            current ? { ...current, model } : current,
+          );
+        }
+        return;
+      }
+      if (source === 'offline') setAiStatus('offline');
+    },
+    [],
+  );
+
   useEffect(() => {
     if (hydrated) void checkAi();
   }, [hydrated, checkAi]);
@@ -663,6 +679,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     ? task.start
                     : null,
                 fixed,
+                dueDate: draft.dueDate,
               }
             : task,
         );
@@ -677,6 +694,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             draft.pri,
             fixed ? draft.start : null,
             fixed,
+            [],
+            false,
+            draft.dueDate,
           ),
         ];
       }
@@ -824,8 +844,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     async (taskId: string) => {
       const task = stateRef.current.tasks.find((item) => item.id === taskId);
       if (!task) return 0;
-      const fallback = generateSteps(task.title);
-      const response = await requestSteps(task.title, task.effort);
+      const fallback = generateSteps(task.title, task.dur);
+      const response = await requestSteps(task.title, task.effort, task.dur);
+      if (response) recordAi(response.source, response.model);
+      else setAiStatus('offline');
       const source: ParsedStep[] | null = response?.steps ?? null;
       const steps: Step[] = source
         ? source.map((step) => ({
@@ -838,7 +860,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       applyTaskSteps(taskId, steps);
       return steps.length;
     },
-    [applyTaskSteps],
+    [applyTaskSteps, recordAi],
   );
 
   const pushHistory = useCallback(
@@ -939,6 +961,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         snapshotState.startH,
         snapshotState.endH,
       );
+      if (response) recordAi(response.source, response.model);
+      else setAiStatus('offline');
       const local = parseBrainDump(text);
       const parsed: ParsedCheckIn = response ?? {
         items: local.items,
@@ -956,7 +980,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       commit(applied.state);
       setTyping(false);
     },
-    [commit, snapshot],
+    [commit, recordAi, snapshot],
   );
 
   const completeOnboarding = useCallback(
