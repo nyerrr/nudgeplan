@@ -116,6 +116,53 @@ app ID.
 
 ---
 
+## 4. Build for iOS
+
+iOS has **no free equivalent of the APK link**. You cannot hand someone a file
+or a QR and have it install on an iPhone unless you have an **Apple Developer
+Program** membership ($99/yr) — that is Apple's rule, not the app's.
+
+The project is ready for it: `ios.bundleIdentifier` and `ios.buildNumber` are in
+`app.json`, and the `preview-ios` profile in `eas.json` produces an installable
+`.ipa` for registered devices.
+
+### Ad-hoc install (link or QR, no App Store)
+
+1. Enrol in the Apple Developer Program.
+2. Register each iPhone (max 100 per year, each needs a rebuild if added later):
+   ```powershell
+   eas device:create
+   ```
+   Open the link it prints on the phone; it collects the UDID automatically.
+3. Build:
+   ```powershell
+   eas build -p ios --profile preview-ios
+   ```
+4. Share the build's install link or QR from expo.dev. The phone must open it in
+   **Safari** (not Chrome) — it installs over the air and lands on the home screen.
+
+### TestFlight (better for lots of testers)
+
+```powershell
+eas submit -p ios
+```
+
+Then add testers in App Store Connect. No UDIDs, builds last 90 days, external
+testers get a short beta review. Internal testers skip review entirely.
+
+### Notes
+
+- Google sign-in returns to `nudgeplan://auth/callback` on iOS too — already in
+  the allow-list from step 2.
+- Bump `expo.ios.buildNumber` in `app.json` before every rebuild, the same way
+  `versionCode` works for Android.
+- `expo start` → QR opens **Expo Go**, which is a preview client, not an install
+  of NudgePlan. It also cannot complete Google sign-in (`exp://` redirect).
+- No Apple account? Ship the **web build** instead: it runs in Safari, can be
+  added to the home screen, and costs nothing.
+
+---
+
 ## Environment variables
 
 | Variable | Where | Notes |
