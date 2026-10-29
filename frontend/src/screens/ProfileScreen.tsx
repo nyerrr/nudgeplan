@@ -44,6 +44,8 @@ export function ProfileScreen() {
     resetApp,
     testNudge,
     storageWarning,
+    cloudSyncStatus,
+    retryCloudSync,
     aiStatus,
     aiInfo,
     checkAi,
@@ -142,6 +144,52 @@ export function ProfileScreen() {
                 {accountProvider}
               </Text>
             </View>
+          ) : null}
+        </View>
+
+        <View style={[styles.syncStatus, { borderTopColor: colors.line }]}>
+          <View
+            style={[
+              styles.syncDot,
+              {
+                backgroundColor:
+                  cloudSyncStatus === 'failed'
+                    ? colors.warn
+                    : cloudSyncStatus === 'synced'
+                      ? colors.low
+                      : colors.muted,
+              },
+            ]}
+          />
+          <Text
+            accessibilityLiveRegion="polite"
+            style={{
+              color: cloudSyncStatus === 'failed' ? colors.warn : colors.muted,
+              fontFamily: fonts.medium,
+              fontSize: 12.5,
+              flex: 1,
+            }}
+          >
+            {cloudSyncStatus === 'local'
+              ? 'Saved locally'
+              : cloudSyncStatus === 'syncing'
+                ? 'Syncing…'
+                : cloudSyncStatus === 'synced'
+                  ? 'Synced'
+                  : 'Sync failed'}
+          </Text>
+          {cloudSyncStatus === 'failed' ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={retryCloudSync}
+              style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+            >
+              <Text
+                style={{ color: colors.brand, fontFamily: fonts.semibold, fontSize: 12.5 }}
+              >
+                Retry
+              </Text>
+            </Pressable>
           ) : null}
         </View>
 
@@ -687,6 +735,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 11,
     paddingVertical: 12,
+  },
+  syncStatus: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: 8,
+  },
+  syncDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
   accountIcon: {
     width: 38,

@@ -67,13 +67,13 @@ npx expo start
 Press `a`. The emulator reaches the backend at `http://10.0.2.2:8001`
 (this default is set in `src/lib/api.ts`).
 
-### Option C: Physical Android phone (requires Expo Go)
+### Option C: Physical Android phone
 
-Your phone and PC must be on the same WiFi. Set your PC's LAN IP in
+Your phone and PC must be on the same Wi-Fi. Set your PC's LAN IP in
 `frontend/.env`:
 
 ```
-process.env.EXPO_PUBLIC_API_URL
+EXPO_PUBLIC_API_URL=http://<your-pc-lan-ip>:8001
 ```
 
 Find your LAN IP with `ipconfig` (look for IPv4 Address).
@@ -115,7 +115,7 @@ AI requests authenticate with the signed-in user's Supabase access token.
 
 ### Home
 
-- Time-aware greeting and quick brain-dump bar with a simulated voice sample
+- Time-aware greeting and quick brain-dump bar with voice input when supported
 - Reality Check card: planned vs. open time, capacity %, move/keep actions
 - Low/Medium/High energy selector that re-runs the schedule
 - Up-next task list with inline completion
@@ -138,6 +138,8 @@ AI requests authenticate with the signed-in user's Supabase access token.
 - Calls `POST /plan/checkin`; falls back to local parsing if the backend is down
 - Parsed task cards, capacity warning, and CTAs such as "Move N to tomorrow",
   "View plan", and "Open focus"
+- Parsed tasks are added to the plan immediately; edit or remove them afterward
+  from the task sheet
 
 ### Focus (Micro-Step Guard)
 
@@ -155,12 +157,14 @@ AI requests authenticate with the signed-in user's Supabase access token.
 ### Profile
 
 - Name, working hours, nudges toggle, Auto/Light/Dark theme
+- Account card shows local or cloud sync status and offers a retry after errors
 - About screen
 - Prototype demos: brain dump, overload, get unstuck, low energy, reset
 
 ### Persistence and theme
 
-- AsyncStorage persists tasks, chat, history, settings, theme, and step progress
+- AsyncStorage persists tasks, chat, history, settings, theme, step progress,
+  and pending cloud deletions for retry
 - Poppins fonts, Ionicons, LinearGradient, and safe-area insets
 - Light and dark palettes from the original prototype
 

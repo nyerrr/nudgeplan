@@ -104,6 +104,50 @@ function keyFor(userId?: string | null): string {
   return `${BASE_KEY}-${userId || GUEST_ID}`;
 }
 
+function pendingDeletesKey(userId: string): string {
+  return `nudgeplan-pending-deletes-2-${userId}`;
+}
+
+let pendingDeleteQueue: Promise<void> = Promise.resolve();
+
+export async function loadPendingDeletes(userId: string): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(pendingDeletesKey(userId));
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function addPendingDelete(userId: string, taskId: string): Promise<void> {
+  pendingDeleteQueue = pendingDeleteQueue
+    .catch(() => undefined)
+    .then(async () => {
+      const ids = new Set(await loadPendingDeletes(userId));
+      ids.add(taskId);
+      await AsyncStorage.setItem(pendingDeletesKey(userId), JSON.stringify([...ids]));
+    });
+  return pendingDeleteQueue;
+}
+
+export async function clearPendingDelete(userId: string, taskId: string): Promise<void> {
+  pendingDeleteQueue = pendingDeleteQueue
+    .catch(() => undefined)
+    .then(async () => {
+      const ids = new Set(await loadPendingDeletes(userId));
+      ids.delete(taskId);
+      if (ids.size) {
+        await AsyncStorage.setItem(pendingDeletesKey(userId), JSON.stringify([...ids]));
+      } else {
+        await AsyncStorage.removeItem(pendingDeletesKey(userId));
+      }
+    });
+  return pendingDeleteQueue;
+}
+
 export async function loadState(userId?: string | null): Promise<AppState | null> {
   const key = keyFor(userId);
   try {

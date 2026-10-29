@@ -49,7 +49,14 @@ import {
   sendTestNotification,
   snoozeTaskNudge,
 } from './lib/notifications';
-import { clearState, loadState, saveState } from './lib/storage';
+import {
+  addPendingDelete,
+  clearPendingDelete,
+  clearState,
+  loadPendingDeletes,
+  loadState,
+  saveState,
+} from './lib/storage';
 import { paletteFor, type Palette } from './theme';
 import { supabase } from './lib/supabase';
 import type {
@@ -75,6 +82,8 @@ export interface NudgeInfo {
   at: Date;
   title: string;
 }
+
+export type CloudSyncStatus = 'local' | 'syncing' | 'synced' | 'failed';
 
 interface AppContextValue {
   state: AppState;
@@ -124,6 +133,8 @@ interface AppContextValue {
   resetApp: () => Promise<void>;
   testNudge: () => Promise<void>;
   storageWarning: boolean;
+  cloudSyncStatus: CloudSyncStatus;
+  retryCloudSync: () => void;
   lastNudge: NudgeInfo | null;
 }
 
@@ -160,6 +171,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
   const [lastNudge, setLastNudge] = useState<NudgeInfo | null>(null);
   const [storageWarning, setStorageWarning] = useState(false);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>('local');
+  const [syncAttempt, setSyncAttempt] = useState(0);
+  const syncSequence = useRef(0);
+  const syncQueue = useRef<Promise<void>>(Promise.resolve());
+  const pendingDeletes = useRef(new Map<string, Set<string>>());
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -336,6 +352,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated || !userId || loadedFor !== userId) return;
     let active = true;
+    const sequence = ++syncSequence.current;
     const id = setTimeout(async () => {
       // Always cache locally first
       const ok = await saveState(state, userId);
@@ -343,23 +360,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (ok) setStorageWarning(false);
       else setStorageWarning(true);
 
-      // Sync to Supabase for authenticated non-guest users
-      if (user?.provider !== 'guest' && supabase) {
-        try {
-          await upsertProfile(userId, state);
-          await upsertTasks(userId, state.tasks);
-          // Sync steps per task
-          await Promise.all(state.tasks.map(t => syncStepsForTask(userId, t.id, t.steps)));
-        } catch (e) {
-          console.warn('[sync] Failed to push to Supabase', e);
-        }
+      // Guest and unconfigured accounts are intentionally device-local.
+      if (user?.provider === 'guest' || !supabase) {
+        setCloudSyncStatus('local');
+        return;
       }
+
+      setCloudSyncStatus('syncing');
+      // Serialize writes so an older snapshot cannot finish after a newer one.
+      syncQueue.current = syncQueue.current
+        .catch(() => undefined)
+        .then(async () => {
+          if (!active) return;
+          try {
+            const queuedDeletes = pendingDeletes.current.get(userId) ?? new Set<string>();
+            for (const taskId of await loadPendingDeletes(userId)) {
+              queuedDeletes.add(taskId);
+            }
+            pendingDeletes.current.set(userId, queuedDeletes);
+            for (const taskId of queuedDeletes) {
+              if (taskId === '*') await deleteAllTasksRemote(userId);
+              else await deleteTaskRemote(userId, taskId);
+              queuedDeletes.delete(taskId);
+              await clearPendingDelete(userId, taskId);
+            }
+            await upsertProfile(userId, state);
+            await upsertTasks(userId, state.tasks);
+            // Sync steps per task
+            await Promise.all(state.tasks.map(t => syncStepsForTask(userId, t.id, t.steps)));
+            if (active && sequence === syncSequence.current) {
+              setCloudSyncStatus('synced');
+            }
+          } catch (e) {
+            console.warn('[sync] Failed to push to Supabase', e);
+            if (active && sequence === syncSequence.current) {
+              setCloudSyncStatus('failed');
+            }
+          }
+        });
     }, 250);
     return () => {
       active = false;
       clearTimeout(id);
     };
-  }, [state, hydrated, userId, loadedFor, user?.provider]);
+  }, [state, hydrated, userId, loadedFor, user?.provider, syncAttempt]);
+
+  const retryCloudSync = useCallback(() => {
+    setSyncAttempt((attempt) => attempt + 1);
+  }, []);
 
   // Save immediately when the app is backgrounded.
   useEffect(() => {
@@ -371,6 +419,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
       if (next === 'active') {
+        setSyncAttempt((attempt) => attempt + 1);
         setTimer((current) => {
           if (!current.running || current.endsAt == null) return current;
           const secs = Math.max(
@@ -728,8 +777,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       notify('Task deleted.', true);
       // Sync deletion to Supabase for authenticated non-guest users
       if (user?.provider !== 'guest' && supabase && userIdRef.current) {
-        void deleteTaskRemote(userIdRef.current, id).catch((e) =>
-          console.warn('[sync] Failed to delete task from Supabase', e),
+        const owner = userIdRef.current;
+        const queued = pendingDeletes.current.get(owner) ?? new Set<string>();
+        queued.add(id);
+        pendingDeletes.current.set(owner, queued);
+        void addPendingDelete(owner, id).catch((e) =>
+          console.warn('[sync] Failed to save pending task deletion', e),
         );
       }
     },
@@ -1057,13 +1110,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const resetApp = useCallback(async () => {
     await cancelTaskNudges();
     await cancelTimerNotification();
-    await clearState(userIdRef.current);
-    // Clear from Supabase for authenticated non-guest users
     if (user?.provider !== 'guest' && supabase && userIdRef.current) {
-      void deleteAllTasksRemote(userIdRef.current).catch((e) =>
-        console.warn('[sync] Failed to clear tasks from Supabase', e),
+      const owner = userIdRef.current;
+      const queued = pendingDeletes.current.get(owner) ?? new Set<string>();
+      queued.add('*');
+      pendingDeletes.current.set(owner, queued);
+      await addPendingDelete(owner, '*').catch((e) =>
+        console.warn('[sync] Failed to save pending account reset', e),
       );
     }
+    await clearState(userIdRef.current);
     nudgeKeyRef.current = '';
     setState(initialState());
     updateTimer(EMPTY_TIMER);
@@ -1198,6 +1254,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       resetPreferences,
       testNudge,
       storageWarning,
+      cloudSyncStatus,
+      retryCloudSync,
       lastNudge,
     }),
     [
@@ -1248,6 +1306,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       resetPreferences,
       testNudge,
       storageWarning,
+      cloudSyncStatus,
+      retryCloudSync,
       lastNudge,
     ],
   );

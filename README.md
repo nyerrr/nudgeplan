@@ -36,18 +36,19 @@ setup, and building a shareable Android APK or installable iPhone app with EAS.
 ## Architecture
 
 ```
-frontend/  React Native + Expo Router + TypeScript (UI and local plan state)
+frontend/  React Native + Expo + TypeScript (UI and local plan state)
 backend/   Python + FastAPI + google-genai          (parsing and AI calls)
 ```
 
 ## The core loop
 
 ```
-Dump  ->  Confirm  ->  Reality Check  ->  Today
+Dump  ->  Plan  ->  Reality Check  ->  Today
 ```
 
 - **Dump** - say everything on your mind, however messy.
-- **Confirm** - review what was extracted, tune it, drop what is not real.
+- **Plan** - extracted tasks are added to your plan; edit or remove them from
+  the Plan screen.
 - **Reality Check** - set your available hours and energy. It never
   auto-schedules: it measures your workload against what you can realistically
   do, then proposes the fewest moves that make the day fit ("you have six hours
@@ -55,12 +56,14 @@ Dump  ->  Confirm  ->  Reality Check  ->  Today
   tomorrow").
 - **Today** - your steps, sized to start in under ten minutes.
 
-- `frontend/app/` - Expo Router screens and modal flows.
-- `frontend/src/lib/realityCheck.ts` - deterministic capacity and workload rules.
+- `frontend/App.tsx` - app shell and state-based screen switch.
+- `frontend/src/state.tsx` - app state, persistence, and user actions.
+- `frontend/src/lib/engine.ts` - deterministic parsing, scheduling, capacity,
+  and micro-step rules.
 - `backend/main.py` - API routes and Gemini response validation. Gemini is
   optional; mock mode uses the deterministic planner.
 
-See `frontend/README.md` for the route and component map.
+See `frontend/README.md` for the screen and component map.
 
 ## Quick start (no Android phone required)
 

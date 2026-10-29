@@ -14,6 +14,10 @@ export async function fetchRemoteState(userId: string) {
     supabase.from('checkins').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
   ]);
 
+  const results = [profileRes, tasksRes, stepsRes, historyRes, dailyRes, checkinsRes];
+  const failed = results.find((result) => result.error);
+  if (failed?.error) throw failed.error;
+
   return {
     profile: profileRes.data,
     tasks: tasksRes.data ?? [],
@@ -26,7 +30,7 @@ export async function fetchRemoteState(userId: string) {
 
 export async function upsertProfile(userId: string, state: AppState) {
   if (!supabase) return;
-  await supabase.from('profiles').upsert({
+  const { error } = await supabase.from('profiles').upsert({
     id: userId,
     name: state.name,
     start_h: state.startH,
@@ -38,6 +42,7 @@ export async function upsertProfile(userId: string, state: AppState) {
     onboarded: state.onboarded,
     updated_at: new Date().toISOString(),
   });
+  if (error) throw error;
 }
 
 export async function upsertTasks(userId: string, tasks: Task[]) {
@@ -90,14 +95,32 @@ export async function syncStepsForTask(userId: string, taskId: string, steps: St
 export async function deleteTaskRemote(userId: string, taskId: string) {
   if (!supabase) return;
   // Steps will cascade if ON DELETE CASCADE is set, but be explicit
-  await supabase.from('steps').delete().eq('task_id', taskId).eq('user_id', userId);
-  await supabase.from('tasks').delete().eq('id', taskId).eq('user_id', userId);
+  const { error: stepsError } = await supabase
+    .from('steps')
+    .delete()
+    .eq('task_id', taskId)
+    .eq('user_id', userId);
+  if (stepsError) throw stepsError;
+  const { error: taskError } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', taskId)
+    .eq('user_id', userId);
+  if (taskError) throw taskError;
 }
 
 export async function deleteAllTasksRemote(userId: string) {
   if (!supabase) return;
-  await supabase.from('steps').delete().eq('user_id', userId);
-  await supabase.from('tasks').delete().eq('user_id', userId);
+  const { error: stepsError } = await supabase
+    .from('steps')
+    .delete()
+    .eq('user_id', userId);
+  if (stepsError) throw stepsError;
+  const { error: tasksError } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('user_id', userId);
+  if (tasksError) throw tasksError;
 }
 
 type RemoteData = Awaited<ReturnType<typeof fetchRemoteState>>;
