@@ -39,16 +39,40 @@ planner. `/` and `/health` stay public.
 
 ## 2. Supabase redirect URLs
 
-Supabase → **Authentication → URL Configuration → Additional Redirect URLs**,
-add both:
+Supabase → **Authentication → URL Configuration**.
+
+**Site URL** — the address the browser should return to. This is the *web* app,
+never the app scheme:
 
 ```
+http://localhost:8081        # while developing
+https://<your-web-domain>    # the deployed web build
+```
+
+**Additional Redirect URLs** — everything the app may ask for, including the
+native deep link:
+
+```
+http://localhost:8081
+http://localhost:8081/**
+https://<your-web-domain>
+https://<your-web-domain>/**
 nudgeplan://auth/callback
 nudgeplan://**
 ```
 
-Keep `http://localhost:8081` for web development. Google Cloud needs no change:
-the Web OAuth client still redirects to
+`nudgeplan://auth/callback` is what the APK passes as `redirectTo`; the
+`http(s)` entries are what the web build passes (`window.location.origin`).
+Any origin missing from this list is replaced by the **Site URL**, so a web
+sign-in then ends up at the custom scheme and Chrome shows:
+
+```
+Failed to launch 'nudgeplan:?code=…' because the scheme does not have a registered handler.
+```
+
+That message is almost always a Site URL / allow-list problem, not an app bug.
+
+Google Cloud needs no change: the Web OAuth client still redirects to
 `https://<project-ref>.supabase.co/auth/v1/callback`.
 
 ---

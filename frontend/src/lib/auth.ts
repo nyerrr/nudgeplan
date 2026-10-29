@@ -87,7 +87,18 @@ function sessionFromUser(user: User): AuthSession {
  * Native: the app scheme from app.json ("nudgeplan://auth/callback").
  */
 function redirectUrl(): string {
-  if (Platform.OS === 'web') return window.location.origin;
+  if (Platform.OS === 'web') {
+    const origin = typeof window === 'undefined' ? '' : window.location.origin;
+    // A file:// page has the origin "null". Supabase would reject it and fall
+    // back to the project Site URL, which sends the browser to the native
+    // scheme instead of the app.
+    if (!/^https?:\/\//.test(origin)) {
+      throw new Error(
+        'Google sign-in needs the web app served over http(s). Open http://localhost:8081 rather than the HTML file directly.',
+      );
+    }
+    return origin;
+  }
   return Linking.createURL('/auth/callback');
 }
 
