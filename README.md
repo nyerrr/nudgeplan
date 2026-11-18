@@ -43,12 +43,12 @@ backend/   Python + FastAPI + google-genai          (parsing and AI calls)
 ## The core loop
 
 ```
-Dump  ->  Plan  ->  Reality Check  ->  Today
+Dump  ->  Review  ->  Reality Check  ->  Today
 ```
 
 - **Dump** - say everything on your mind, however messy.
-- **Plan** - extracted tasks are added to your plan; edit or remove them from
-  the Plan screen.
+- **Review** - edit, remove, or add to extracted tasks before approving them
+  for your plan.
 - **Reality Check** - set your available hours and energy. It never
   auto-schedules: it measures your workload against what you can realistically
   do, then proposes the fewest moves that make the day fit ("you have six hours

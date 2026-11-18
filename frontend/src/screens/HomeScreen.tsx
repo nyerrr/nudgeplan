@@ -37,6 +37,7 @@ export function HomeScreen() {
   const {
     state,
     colors,
+    pendingReview,
     sendCheckIn,
     setEnergy,
     go,
@@ -64,8 +65,9 @@ export function HomeScreen() {
   const submit = () => {
     if (typing || !text.trim()) return;
     const value = text;
-    setText('');
-    void sendCheckIn(value);
+    void sendCheckIn(value).then((accepted) => {
+      if (accepted) setText((current) => (current === value ? '' : current));
+    });
   };
 
   const listen = () => {
@@ -137,7 +139,7 @@ export function HomeScreen() {
           value={text}
           onChangeText={setText}
           onSubmitEditing={submit}
-          editable={!typing}
+          editable={!typing && !pendingReview}
           placeholder={listening ? 'Listening...' : 'What’s on your mind?'}
           placeholderTextColor={colors.muted}
           selectionColor={colors.brand}
@@ -147,7 +149,7 @@ export function HomeScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Voice input"
-          disabled={!supported}
+          disabled={!supported || typing || !!pendingReview}
           onPress={listen}
           style={[
             styles.round,
@@ -157,7 +159,7 @@ export function HomeScreen() {
                 : supported
                   ? colors.surface2
                   : colors.line,
-              opacity: supported ? 1 : 0.5,
+              opacity: supported && !typing && !pendingReview ? 1 : 0.5,
             },
           ]}
         >
@@ -170,17 +172,29 @@ export function HomeScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Send"
-          accessibilityState={{ disabled: typing }}
-          disabled={typing}
+          accessibilityState={{ disabled: typing || !!pendingReview }}
+          disabled={typing || !!pendingReview}
           onPress={submit}
           style={[
             styles.round,
-            { backgroundColor: colors.brand, opacity: typing ? 0.5 : 1 },
+            { backgroundColor: colors.brand, opacity: typing || !!pendingReview ? 0.5 : 1 },
           ]}
         >
           <Icon name="send" size={18} color={colors.onBrand} />
         </Pressable>
       </View>
+
+      {pendingReview ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => go('checkin')}
+          style={[styles.reviewHint, { backgroundColor: colors.surface2 }]}
+        >
+          <Text style={{ color: colors.brand, fontFamily: fonts.medium, fontSize: 12.5 }}>
+            Finish reviewing proposed tasks in Check-in
+          </Text>
+        </Pressable>
+      ) : null}
 
       <Card style={styles.energyCard}>
         <View style={styles.sectionHeading}>
@@ -526,6 +540,15 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
     paddingRight: 5,
     paddingVertical: 5,
+  },
+  reviewHint: {
+    alignSelf: 'flex-start',
+    minHeight: 40,
+    justifyContent: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    marginHorizontal: 4,
+    marginTop: -5,
   },
   askInput: {
     minHeight: 44,

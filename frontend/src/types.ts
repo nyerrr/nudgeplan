@@ -65,6 +65,24 @@ export interface ParsedCheckIn {
   source?: 'gemini' | 'offline';
 }
 
+export interface TaskProposal {
+  key: string;
+  title: string;
+  durationText: string;
+  effort: Effort;
+  day: Day;
+  priority: 1 | 2 | 3;
+  startText: string;
+  dueText: string;
+  warnings: string[];
+  source: ParsedTask | null;
+}
+
+export interface PendingCheckInReview {
+  parsed: ParsedCheckIn;
+  proposals: TaskProposal[];
+}
+
 export interface CheckInApiResponse extends ParsedCheckIn {
   model?: string | null;
 }

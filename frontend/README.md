@@ -136,10 +136,13 @@ AI requests authenticate with the signed-in user's Supabase access token.
 - Conversational chat with typing indicator
 - Demo chips for common brain dumps
 - Calls `POST /plan/checkin`; falls back to local parsing if the backend is down
-- Parsed task cards, capacity warning, and CTAs such as "Move N to tomorrow",
-  "View plan", and "Open focus"
-- Parsed tasks are added to the plan immediately; edit or remove them afterward
-  from the task sheet
+- Parsed tasks are held in a review form until approved
+- Edit title, duration, deadline, start time, effort, day, and priority; remove
+  incorrect suggestions or add missing tasks
+- Flags likely duplicate tasks and estimates whose duration was not stated
+- Cancel the review without changing the task plan
+- Capacity warning and follow-up actions such as "Move N to tomorrow", "View
+  plan", and "Open focus" appear after approval
 
 ### Focus (Micro-Step Guard)
 

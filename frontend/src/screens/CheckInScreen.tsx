@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '../components/Icon';
+import { TaskReview } from '../components/TaskReview';
 import { Button } from '../components/ui';
 import { useVoiceInput } from '../lib/useVoiceInput';
 import { useApp } from '../state';
@@ -23,6 +24,7 @@ export function CheckInScreen() {
     state,
     colors,
     typing,
+    pendingReview,
     sendCheckIn,
     go,
     moveN,
@@ -57,13 +59,14 @@ export function CheckInScreen() {
       chatRef.current?.scrollToEnd({ animated: true });
     }, 60);
     return () => clearTimeout(id);
-  }, [state.chat.length, typing]);
+  }, [state.chat.length, typing, pendingReview]);
 
   const submit = () => {
     if (typing || !text.trim()) return;
     const value = text;
-    setText('');
-    void sendCheckIn(value);
+    void sendCheckIn(value).then((accepted) => {
+      if (accepted) setText((current) => (current === value ? '' : current));
+    });
   };
 
   const listen = () => {
@@ -223,6 +226,7 @@ export function CheckInScreen() {
                   key={example.title}
                   accessibilityRole="button"
                   accessibilityLabel={example.title}
+                  disabled={typing || !!pendingReview}
                   onPress={() => void sendCheckIn(example.prompt)}
                   style={[styles.quickExample, { backgroundColor: colors.surface, borderColor: colors.line }]}
                 >
@@ -235,6 +239,7 @@ export function CheckInScreen() {
           </View>
         ) : null}
         {state.chat.map(renderMessage)}
+        <TaskReview />
         {typing ? (
           <View
             style={[
@@ -285,6 +290,7 @@ export function CheckInScreen() {
                 key={example.title}
                 accessibilityRole="button"
                 accessibilityLabel={example.title}
+                disabled={typing || !!pendingReview}
                 onPress={() => void sendCheckIn(example.prompt)}
                 style={[styles.compactExample, { backgroundColor: colors.surface, borderColor: colors.line }]}
               >
@@ -306,7 +312,7 @@ export function CheckInScreen() {
             value={text}
             onChangeText={setText}
             onSubmitEditing={submit}
-            editable={!typing}
+            editable={!typing && !pendingReview}
             placeholder={listening ? 'Listening...' : 'Tell me about your day...'}
             placeholderTextColor={colors.muted}
             selectionColor={colors.brand}
@@ -316,7 +322,7 @@ export function CheckInScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Voice input"
-            disabled={!supported}
+            disabled={!supported || typing || !!pendingReview}
             onPress={listen}
             style={[
               styles.round,
@@ -339,12 +345,12 @@ export function CheckInScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Send"
-            accessibilityState={{ disabled: typing }}
-            disabled={typing}
+            accessibilityState={{ disabled: typing || !!pendingReview }}
+            disabled={typing || !!pendingReview}
             onPress={submit}
             style={[
               styles.round,
-              { backgroundColor: colors.brand, opacity: typing ? 0.5 : 1 },
+              { backgroundColor: colors.brand, opacity: typing || !!pendingReview ? 0.5 : 1 },
             ]}
           >
             <Icon name="send" size={18} color={colors.onBrand} />

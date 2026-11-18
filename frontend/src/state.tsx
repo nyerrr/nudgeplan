@@ -51,6 +51,12 @@ import {
   snoozeTaskNudge,
 } from './lib/notifications';
 import {
+  approvedCheckIn,
+  cancelTaskReview as appendReviewCancellation,
+  createTaskReview,
+  validateTaskProposal,
+} from './lib/taskReview';
+import {
   addPendingDelete,
   clearPendingDelete,
   clearState,
@@ -69,11 +75,13 @@ import type {
   OnboardingProfile,
   ParsedCheckIn,
   ParsedStep,
+  PendingCheckInReview,
   ResolvedTheme,
   Screen,
   Step,
   Task,
   TaskDraft,
+  TaskProposal,
   ThemeMode,
   TimerState,
   ToastState,
@@ -119,7 +127,14 @@ interface AppContextValue {
   moveN: (count: number) => void;
   moveLoose: () => void;
   setFocus: (id: string) => void;
-  sendCheckIn: (text: string) => Promise<void>;
+  sendCheckIn: (text: string) => Promise<boolean>;
+  pendingReview: PendingCheckInReview | null;
+  reviewError: string | null;
+  updateReviewProposal: (key: string, patch: Partial<TaskProposal>) => void;
+  addReviewProposal: () => void;
+  removeReviewProposal: (key: string) => void;
+  cancelTaskReview: () => void;
+  confirmTaskReview: () => void;
   timerToggle: () => void;
   timerReset: (stepId: string, seconds: number) => void;
   timerSkip: () => void;
@@ -161,6 +176,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [screen, setScreen] = useState<Screen>('home');
   const [typing, setTyping] = useState(false);
+  const [pendingReview, setPendingReview] = useState<PendingCheckInReview | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const pendingReviewRef = useRef<PendingCheckInReview | null>(null);
+  const checkInInFlight = useRef(false);
+  const checkInGeneration = useRef(0);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [sheetTaskId, setSheetTaskId] = useState<string | null | undefined>(
     undefined,
@@ -189,6 +209,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const userId = user?.id ?? null;
   const userIdRef = useRef<string | null>(userId);
   userIdRef.current = userId;
+
+  useEffect(() => {
+    checkInGeneration.current += 1;
+    checkInInFlight.current = false;
+    setTyping(false);
+    pendingReviewRef.current = null;
+    setPendingReview(null);
+    setReviewError(null);
+  }, [userId]);
 
   // Load the plan that belongs to the signed-in account. `loadedFor` records
   // which account the in-memory state came from, so a sign-out/sign-in swap
@@ -1001,7 +1030,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const sendCheckIn = useCallback(
     async (raw: string) => {
       const text = raw.trim().slice(0, 4000);
-      if (!text) return;
+      if (!text || checkInInFlight.current || pendingReviewRef.current) return false;
+      checkInInFlight.current = true;
+      const requestGeneration = ++checkInGeneration.current;
+      const requestOwner = userIdRef.current;
       setScreen('checkin');
       const userMessage: ChatMessage = {
         id: newId('m'),
@@ -1014,37 +1046,146 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }));
       setTyping(true);
 
-      const snapshotState = stateRef.current;
-      const response = await requestCheckIn(
-        text,
-        snapshotState.energy,
-        snapshotState.startH,
-        snapshotState.endH,
-      );
-      if (response) recordAi(response.source, response.model);
-      else setAiStatus('offline');
-      const local = parseBrainDump(text);
-      const parsed: ParsedCheckIn = response ?? {
-        items: local.items,
-        energy: local.energy,
-        reply: '',
-        source: 'offline',
-      };
+      try {
+        const snapshotState = stateRef.current;
+        let response = null;
+        try {
+          response = await requestCheckIn(
+            text,
+            snapshotState.energy,
+            snapshotState.startH,
+            snapshotState.endH,
+          );
+        } catch {
+          response = null;
+        }
+        if (userIdRef.current !== requestOwner) return false;
+        if (response) recordAi(response.source, response.model);
+        else setAiStatus('offline');
+        const local = parseBrainDump(text);
+        const parsed: ParsedCheckIn = response ?? {
+          items: local.items,
+          energy: local.energy,
+          reply: '',
+          source: 'offline',
+        };
 
-      if (parsed.items.length || parsed.energy) snapshot();
-      const latest = stateRef.current;
-      const base = latest.chat.some((message) => message.id === userMessage.id)
-        ? latest
-        : {
-            ...latest,
-            chat: [...latest.chat, userMessage].slice(-MAX_CHAT_MESSAGES),
-          };
-      const applied = applyCheckIn(base, parsed);
-      commit(applied.state);
-      setTyping(false);
+        const latest = stateRef.current;
+        const base = latest.chat.some((message) => message.id === userMessage.id)
+          ? latest
+          : {
+              ...latest,
+              chat: [...latest.chat, userMessage].slice(-MAX_CHAT_MESSAGES),
+            };
+        if (parsed.items.length) {
+          if (base !== latest) setState(base);
+          const review = createTaskReview(parsed, text, latest.tasks);
+          pendingReviewRef.current = review;
+          setPendingReview(review);
+          setReviewError(null);
+        } else {
+          if (parsed.energy) snapshot();
+          const applied = applyCheckIn(base, parsed);
+          commit(applied.state);
+        }
+        return true;
+      } finally {
+        if (requestGeneration === checkInGeneration.current) {
+          checkInInFlight.current = false;
+          setTyping(false);
+        }
+      }
     },
     [commit, recordAi, snapshot],
   );
+
+  const updateReviewProposal = useCallback(
+    (key: string, patch: Partial<TaskProposal>) => {
+      const current = pendingReviewRef.current;
+      if (!current) return;
+      const next = {
+        ...current,
+        proposals: current.proposals.map((proposal) =>
+          proposal.key === key ? { ...proposal, ...patch } : proposal,
+        ),
+      };
+      pendingReviewRef.current = next;
+      setPendingReview(next);
+      setReviewError(null);
+    },
+    [],
+  );
+
+  const addReviewProposal = useCallback(() => {
+    const current = pendingReviewRef.current;
+    if (!current) return;
+    const proposal: TaskProposal = {
+      key: newId('r'),
+      title: '',
+      durationText: '45',
+      effort: 'med',
+      day: 'today',
+      priority: 2,
+      startText: '',
+      dueText: '',
+      warnings: [],
+      source: null,
+    };
+    const next = { ...current, proposals: [...current.proposals, proposal] };
+    pendingReviewRef.current = next;
+    setPendingReview(next);
+    setReviewError(null);
+  }, []);
+
+  const removeReviewProposal = useCallback((key: string) => {
+    const current = pendingReviewRef.current;
+    if (!current) return;
+    const next = {
+      ...current,
+      proposals: current.proposals.filter((proposal) => proposal.key !== key),
+    };
+    pendingReviewRef.current = next;
+    setPendingReview(next);
+    setReviewError(null);
+  }, []);
+
+  const cancelTaskReview = useCallback(() => {
+    if (!pendingReviewRef.current) return;
+    pendingReviewRef.current = null;
+    setPendingReview(null);
+    setReviewError(null);
+    setState((current) => appendReviewCancellation(current));
+  }, []);
+
+  const confirmTaskReview = useCallback(() => {
+    const review = pendingReviewRef.current;
+    if (!review) return;
+    const invalid = review.proposals
+      .map(validateTaskProposal)
+      .find((error) => error != null);
+    if (invalid) {
+      setReviewError(invalid);
+      return;
+    }
+
+    pendingReviewRef.current = null;
+    setPendingReview(null);
+    setReviewError(null);
+    const parsed = approvedCheckIn(review);
+    const latest = stateRef.current;
+    if (parsed.items.length || parsed.energy) snapshot();
+    if (parsed.items.length || parsed.energy) {
+      const applied = applyCheckIn(latest, parsed);
+      commit(applied.state);
+    } else {
+      const message: ChatMessage = {
+        id: newId('m'),
+        from: 'bot',
+        text: 'No tasks were added. Your plan is unchanged.',
+      };
+      setState({ ...latest, chat: [...latest.chat, message] });
+    }
+  }, [commit, snapshot]);
 
   const completeOnboarding = useCallback(
     async (profile: OnboardingProfile) => {
@@ -1130,6 +1271,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       );
     }
     await clearState(userIdRef.current);
+    pendingReviewRef.current = null;
+    setPendingReview(null);
+    setReviewError(null);
     nudgeKeyRef.current = '';
     setState(initialState());
     updateTimer(EMPTY_TIMER);
@@ -1250,6 +1394,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       moveLoose,
       setFocus,
       sendCheckIn,
+      pendingReview,
+      reviewError,
+      updateReviewProposal,
+      addReviewProposal,
+      removeReviewProposal,
+      cancelTaskReview,
+      confirmTaskReview,
       timerToggle,
       timerReset,
       timerSkip,
@@ -1302,6 +1453,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       moveLoose,
       setFocus,
       sendCheckIn,
+      pendingReview,
+      reviewError,
+      updateReviewProposal,
+      addReviewProposal,
+      removeReviewProposal,
+      cancelTaskReview,
+      confirmTaskReview,
       timerToggle,
       timerReset,
       timerSkip,
