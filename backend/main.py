@@ -906,7 +906,7 @@ real deadline or consequence.
 "next-week", or an ISO date (YYYY-MM-DD). Otherwise null.
 - "start" is a 24-hour HH:MM clock time ONLY when the user fixed a time ("at \
 6pm", "after lunch" is not fixed). Otherwise null.
-- "steps" is 2 to 4 micro-steps. The FIRST step must be startable in under 10 \
+- "steps" is 2 to 4 concrete micro-steps for every planned task. The FIRST step must be startable in under 10 \
 minutes and must not require making a decision.
 - Do not invent tasks the user did not mention. Do not merge unrelated things.
 - "breakdown" is your chat reply. Be warm, direct, and specific in 1-3 \
@@ -1397,9 +1397,9 @@ def _coerce_steps(value: object, title: str) -> list[str]:
         if len(items) >= 5:
             break
 
-    # Micro-Step Guard: a task with no first step is a task that will not start.
+    # Micro-Step Guard: a task with no usable first step is a task that will not start.
     if not items:
-        items = [f"Start: {title}"]
+        return planner.make_steps(title)
 
     return items
 

@@ -1,10 +1,12 @@
 import React from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { Icon } from './Icon';
 import { Button, Card, Segmented } from './ui';
+import { newId } from '../lib/engine';
 import { useApp } from '../state';
 import { fonts } from '../theme';
-import type { Day, Effort, TaskProposal } from '../types';
+import type { Day, Effort, ProposalStep, TaskProposal } from '../types';
 
 function ProposalCard({ proposal }: { proposal: TaskProposal }) {
   const { colors, updateReviewProposal, removeReviewProposal } = useApp();
@@ -17,6 +19,25 @@ function ProposalCard({ proposal }: { proposal: TaskProposal }) {
     },
   ];
   const labelStyle = [styles.label, { color: colors.muted }];
+  const steps = proposal.steps ?? [];
+
+  const updateStep = (stepKey: string, patch: Partial<ProposalStep>) => {
+    updateReviewProposal(proposal.key, {
+      steps: steps.map((step) => (step.key === stepKey ? { ...step, ...patch } : step)),
+    });
+  };
+
+  const addStep = () => {
+    updateReviewProposal(proposal.key, {
+      steps: [...steps, { key: newId('rs'), text: '', minutesText: '5' }],
+    });
+  };
+
+  const removeStep = (stepKey: string) => {
+    updateReviewProposal(proposal.key, {
+      steps: steps.filter((step) => step.key !== stepKey),
+    });
+  };
 
   return (
     <Card style={styles.proposal}>
@@ -119,6 +140,65 @@ function ProposalCard({ proposal }: { proposal: TaskProposal }) {
         value={proposal.priority}
         onChange={(priority) => updateReviewProposal(proposal.key, { priority })}
       />
+
+      <View style={styles.stepsHeader}>
+        <Text style={[labelStyle, { marginBottom: 0, marginTop: 0, flex: 1 }]}>
+          Micro-steps (optional)
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add micro-step"
+          onPress={addStep}
+          style={({ pressed }) => [styles.addStepBtn, { opacity: pressed ? 0.7 : 1 }]}
+        >
+          <Icon name="add" size={16} color={colors.brand} />
+          <Text style={[styles.addStepText, { color: colors.brand }]}>Add step</Text>
+        </Pressable>
+      </View>
+      {steps.length ? (
+        <View style={styles.stepsList}>
+          {steps.map((step, index) => (
+            <View key={step.key} style={[styles.stepRow, { borderColor: colors.line, backgroundColor: colors.surface }]}>
+              <View style={styles.stepMain}>
+                <Text style={[styles.stepIndex, { color: colors.muted }]}>{index + 1}</Text>
+                <TextInput
+                  value={step.text}
+                  onChangeText={(text) => updateStep(step.key, { text })}
+                  maxLength={120}
+                  accessibilityLabel={`Micro-step ${index + 1}`}
+                  placeholder="First small action..."
+                  placeholderTextColor={colors.muted}
+                  style={[styles.stepInput, { color: colors.ink }]}
+                />
+              </View>
+              <View style={styles.stepSide}>
+                <TextInput
+                  value={step.minutesText}
+                  onChangeText={(minutesText) => updateStep(step.key, { minutesText })}
+                  keyboardType="number-pad"
+                  accessibilityLabel={`Micro-step ${index + 1} minutes`}
+                  placeholder="5"
+                  placeholderTextColor={colors.muted}
+                  style={[styles.stepMinInput, { color: colors.ink, borderColor: colors.line, backgroundColor: colors.bg }]}
+                />
+                <Text style={[styles.stepMinLabel, { color: colors.muted }]}>min</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove micro-step ${index + 1}`}
+                  onPress={() => removeStep(step.key)}
+                  style={({ pressed }) => [styles.stepRemove, { opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <Icon name="close" size={16} color={colors.warn} />
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12, marginTop: 2 }}>
+          No micro-steps yet. The AI can include them in a plan, or you can add them here.
+        </Text>
+      )}
     </Card>
   );
 }
@@ -227,5 +307,79 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,
+  },
+  stepsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  addStepBtn: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 4,
+  },
+  addStepText: {
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+  },
+  stepsList: {
+    gap: 6,
+    marginTop: 2,
+  },
+  stepRow: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 8,
+    gap: 6,
+  },
+  stepMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stepIndex: {
+    width: 16,
+    textAlign: 'center',
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+  },
+  stepInput: {
+    flex: 1,
+    minHeight: 36,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    paddingVertical: 4,
+  },
+  stepSide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+  },
+  stepMinInput: {
+    width: 52,
+    minHeight: 34,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    textAlign: 'center',
+    fontFamily: fonts.medium,
+    fontSize: 13,
+  },
+  stepMinLabel: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+  },
+  stepRemove: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

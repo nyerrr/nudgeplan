@@ -1,8 +1,10 @@
 import type {
   AppState,
   ParsedCheckIn,
+  ParsedStep,
   ParsedTask,
   PendingCheckInReview,
+  ProposalStep,
   Task,
   TaskProposal,
 } from '../types';
@@ -60,6 +62,14 @@ function warningsFor(
   return warnings;
 }
 
+function toProposalSteps(steps: ParsedStep[] | undefined): ProposalStep[] {
+  return (steps ?? []).map((step) => ({
+    key: newId('rs'),
+    text: step.text ?? '',
+    minutesText: String(Math.max(1, Math.round(step.min ?? 5))),
+  }));
+}
+
 export function createTaskReview(
   parsed: ParsedCheckIn,
   rawText: string,
@@ -80,6 +90,7 @@ export function createTaskReview(
       source: item,
       kind: item.kind ?? 'task',
       rationale: item.rationale ?? null,
+      steps: toProposalSteps(item.steps),
     })),
   };
 }
@@ -98,6 +109,16 @@ export function validateTaskProposal(proposal: TaskProposal): string | null {
   if (proposal.dueText.trim() && validIsoDate(proposal.dueText) == null) {
     return 'Use a deadline like 2026-11-05.';
   }
+  for (const step of proposal.steps ?? []) {
+    const text = step.text.trim();
+    const min = Number(step.minutesText);
+    if (!text && !step.minutesText.trim()) continue;
+    if (!text) return 'Give each micro-step a name or remove it.';
+    if (text.length > 120) return 'Micro-step names must be 120 characters or fewer.';
+    if (!Number.isInteger(min) || min < 1 || min > 120) {
+      return 'Use a whole-number step duration from 1 to 120 minutes.';
+    }
+  }
   return null;
 }
 
@@ -113,6 +134,13 @@ export function approvedCheckIn(
       const dueDate = proposal.dueText.trim()
         ? validIsoDate(proposal.dueText)
         : null;
+      const steps: ParsedStep[] = (proposal.steps ?? [])
+        .filter((step) => step.text.trim())
+        .map((step) => ({
+          text: step.text.trim(),
+          min: Math.max(1, Math.min(120, Math.round(Number(step.minutesText) || 5))),
+          done: false,
+        }));
       return {
         ...(proposal.source ?? {}),
         title: proposal.title.trim(),
@@ -125,6 +153,7 @@ export function approvedCheckIn(
         dueDate,
         kind: proposal.kind ?? 'task',
         rationale: proposal.rationale ?? null,
+        steps,
       };
     }),
   };

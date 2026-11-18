@@ -92,6 +92,12 @@ export interface ParsedCheckIn {
   source?: 'gemini' | 'offline';
 }
 
+export interface ProposalStep {
+  key: string;
+  text: string;
+  minutesText: string;
+}
+
 export interface TaskProposal {
   key: string;
   title: string;
@@ -105,6 +111,7 @@ export interface TaskProposal {
   source: ParsedTask | null;
   kind?: TaskKind;
   rationale?: string | null;
+  steps: ProposalStep[];
 }
 
 export interface PendingCheckInReview {

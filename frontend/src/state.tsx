@@ -1319,6 +1319,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       dueText: '',
       warnings: [],
       source: null,
+      steps: [],
     };
     const next = { ...current, proposals: [...current.proposals, proposal] };
     pendingReviewRef.current = next;
