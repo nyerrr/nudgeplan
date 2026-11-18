@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { initialState, todayIso } from './engine';
-import type { AppState, Task } from '../types';
+import type { AppState, PendingCheckInReview, Task } from '../types';
 
 const BASE_KEY = 'nudgeplan-app-2';
 const LEGACY_KEY = 'nudgeplan-app-1';
@@ -108,6 +108,53 @@ function pendingDeletesKey(userId: string): string {
   return `nudgeplan-pending-deletes-2-${userId}`;
 }
 
+function pendingReviewKey(userId: string): string {
+  return `nudgeplan-pending-review-2-${userId}`;
+}
+
+function isTaskProposal(value: unknown): value is PendingCheckInReview['proposals'][number] {
+  if (!value || typeof value !== 'object') return false;
+  const proposal = value as Record<string, unknown>;
+  return (
+    typeof proposal.key === 'string' &&
+    typeof proposal.title === 'string' &&
+    typeof proposal.durationText === 'string' &&
+    typeof proposal.effort === 'string' &&
+    typeof proposal.day === 'string' &&
+    typeof proposal.priority === 'number' &&
+    typeof proposal.startText === 'string' &&
+    typeof proposal.dueText === 'string' &&
+    Array.isArray(proposal.warnings) &&
+    proposal.warnings.every((warning) => typeof warning === 'string') &&
+    Array.isArray(proposal.steps) &&
+    proposal.steps.every(
+      (step) =>
+        step &&
+        typeof step === 'object' &&
+        typeof (step as Record<string, unknown>).key === 'string' &&
+        typeof (step as Record<string, unknown>).text === 'string' &&
+        typeof (step as Record<string, unknown>).minutesText === 'string',
+    )
+  );
+}
+
+function isPendingReview(value: unknown): value is PendingCheckInReview {
+  if (!value || typeof value !== 'object') return false;
+  const review = value as Record<string, unknown>;
+  if (!review.parsed || typeof review.parsed !== 'object') return false;
+  const parsed = review.parsed as Record<string, unknown>;
+  const validParsed =
+    Array.isArray(parsed.items) &&
+    typeof parsed.reply === 'string' &&
+    (parsed.energy === null || typeof parsed.energy === 'string') &&
+    (parsed.source === undefined || typeof parsed.source === 'string');
+  return (
+    validParsed &&
+    Array.isArray(review.proposals) &&
+    review.proposals.every(isTaskProposal)
+  );
+}
+
 let pendingDeleteQueue: Promise<void> = Promise.resolve();
 
 export async function loadPendingDeletes(userId: string): Promise<string[]> {
@@ -146,6 +193,36 @@ export async function clearPendingDelete(userId: string, taskId: string): Promis
       }
     });
   return pendingDeleteQueue;
+}
+
+/** An unconfirmed check-in must survive an app restart; otherwise the user's
+ *  message stays in chat but its proposed tasks are lost. */
+export async function loadPendingReview(
+  userId: string,
+): Promise<PendingCheckInReview | null> {
+  try {
+    const raw = await AsyncStorage.getItem(pendingReviewKey(userId));
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isPendingReview(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function savePendingReview(
+  userId: string,
+  review: PendingCheckInReview | null,
+): Promise<void> {
+  try {
+    if (review) {
+      await AsyncStorage.setItem(pendingReviewKey(userId), JSON.stringify(review));
+    } else {
+      await AsyncStorage.removeItem(pendingReviewKey(userId));
+    }
+  } catch {
+    // Best effort: the in-memory review still works for this session.
+  }
 }
 
 export async function loadState(userId?: string | null): Promise<AppState | null> {

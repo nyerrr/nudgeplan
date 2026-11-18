@@ -178,7 +178,10 @@ testers get a short beta review. Internal testers skip review entirely.
 | `EXPO_PUBLIC_API_URL` | `frontend/.env` / EAS env | Must be HTTPS in builds. Keep one value per environment. |
 | `GEMINI_MODEL` | Render (optional) | Cheap default: `gemini-3.5-flash-lite`. |
 | `GEMINI_MODEL_FALLBACKS` | Render (optional) | Comma-separated, tried in order on 503. |
-| `GEMINI_TIMEOUT_SECONDS` | Render (optional) | Per-model timeout, default 30. |
+| `GEMINI_TIMEOUT_SECONDS` | Render (optional) | Per-model timeout, default 15. |
+| `GEMINI_TOTAL_TIMEOUT_SECONDS` | Render (optional) | Whole fallback chain budget, default 40; keep below the app's 60s request timeout. |
+| `MODEL_COOLDOWN_SECONDS` | Render (optional) | Skip a timed-out model for this long, default 120. |
+| `GEMINI_RETRY_TRANSIENT` | Render (optional) | Set to 1 to retry one transient 503/504 per model, default 0. |
 | `GEMINI_MAX_OUTPUT_TOKENS` | Render (optional) | Output cap, default 2048. |
 | `API_AUTH_TOKEN` | local backend only | Static fallback for self-hosting without Supabase. Ignored when Supabase is configured; never put it in the app. |
 | `AI_RATE_LIMIT` / `AI_IP_RATE_LIMIT` | Render (optional) | Per-user and per-IP request caps. Defaults to 30 and 150 per minute. |

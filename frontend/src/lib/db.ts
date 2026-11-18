@@ -1,6 +1,26 @@
 import { supabase } from './supabase';
-import type { AppState, Task, Step } from '../types';
-import { initialState, todayIso } from './engine';
+import type { AppState, DailyStat, HistoryEntry, Task, Step } from '../types';
+import { dayLabel, initialState, todayIso } from './engine';
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+/** These tables use UUID primary keys; the app's own ids are text, so generate
+ *  proper row ids here instead of reusing the local ones. */
+function remoteRowId(): string {
+  const webCrypto = globalThis.crypto as { randomUUID?: () => string } | undefined;
+  if (webCrypto?.randomUUID) return webCrypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
 
 export async function fetchRemoteState(userId: string) {
   if (!supabase) return null;
@@ -123,6 +143,73 @@ export async function deleteAllTasksRemote(userId: string) {
   if (tasksError) throw tasksError;
 }
 
+type InsightTable = 'history' | 'daily_stats' | 'checkins';
+
+async function replaceRemoteRows(
+  table: InsightTable,
+  userId: string,
+  rows: Record<string, unknown>[],
+) {
+  if (!supabase) return;
+  const { error: deleteError } = await supabase
+    .from(table)
+    .delete()
+    .eq('user_id', userId);
+  if (deleteError) throw deleteError;
+  if (!rows.length) return;
+  const { error } = await supabase.from(table).insert(rows);
+  if (error) throw error;
+}
+
+/** Sync the small arrays that drive Insights and the streak. Each table is
+ *  replaced as a unit, which avoids needing a unique constraint per date. */
+export async function upsertInsightData(userId: string, state: AppState) {
+  if (!supabase) return;
+  const now = new Date().toISOString();
+  await Promise.all([
+    replaceRemoteRows(
+      'history',
+      userId,
+      state.history.map((entry) => ({
+        id: remoteRowId(),
+        user_id: userId,
+        text: entry.text.slice(0, 200),
+        type: 'event',
+        when_date: todayIso(0),
+        metadata: { when: entry.when, localId: entry.id },
+        created_at: now,
+      })),
+    ),
+    replaceRemoteRows(
+      'daily_stats',
+      userId,
+      state.daily
+        .filter((stat) => ISO_DATE.test(stat.date))
+        .map((stat) => ({
+          id: remoteRowId(),
+          user_id: userId,
+          date: stat.date,
+          done: stat.done,
+          total: stat.total,
+          updated_at: now,
+        })),
+    ),
+    replaceRemoteRows(
+      'checkins',
+      userId,
+      state.checkins
+        .filter((day) => ISO_DATE.test(day))
+        .map((day) => ({
+          id: remoteRowId(),
+          user_id: userId,
+          raw_text: day,
+          source: 'app',
+          created_at: now,
+        })),
+    ),
+  ]);
+}
+
 /** Remove every synced row for an account (the auth user itself is kept). */
 export async function deleteAllUserDataRemote(userId: string) {
   if (!supabase) return;
@@ -142,15 +229,106 @@ export async function deleteAllUserDataRemote(userId: string) {
 
 type RemoteData = Awaited<ReturnType<typeof fetchRemoteState>>;
 
+function asCount(value: unknown): number {
+  const count = Number(value);
+  return Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
+}
+
+function labelForIsoDate(value: unknown): string {
+  const iso = typeof value === 'string' ? value : '';
+  if (!ISO_DATE.test(iso)) return '';
+  const today = Date.parse(`${todayIso(0)}T00:00:00Z`);
+  const target = Date.parse(`${iso}T00:00:00Z`);
+  if (!Number.isFinite(today) || !Number.isFinite(target)) return iso;
+  return dayLabel(Math.round((target - today) / 86_400_000));
+}
+
+/** Combine the synced Insight tables with local data. Remote rows are newest
+ *  first, so they lead; local-only entries are appended instead of lost. */
+export function mergeInsights(
+  remote: RemoteData,
+  baseState: AppState,
+): Pick<AppState, 'history' | 'daily' | 'checkins'> {
+  const history: HistoryEntry[] = [];
+  const seenHistory = new Set<string>();
+
+  for (const row of remote?.history ?? []) {
+    const data = asRecord(row);
+    const metadata = asRecord(data.metadata);
+    const text = typeof data.text === 'string' ? data.text : '';
+    if (!text) continue;
+    const when =
+      (typeof metadata.when === 'string' && metadata.when) ||
+      labelForIsoDate(data.when_date) ||
+      '';
+    const id =
+      (typeof metadata.localId === 'string' && metadata.localId) ||
+      (typeof data.id === 'string' ? data.id : `remote-h-${history.length}`);
+    const key = `${when}|${text}`;
+    if (seenHistory.has(key)) continue;
+    seenHistory.add(key);
+    history.push({ id, when, text });
+  }
+
+  for (const entry of baseState.history) {
+    const key = `${entry.when}|${entry.text}`;
+    if (seenHistory.has(key)) continue;
+    seenHistory.add(key);
+    history.push(entry);
+  }
+
+  const dailyByDate = new Map<string, DailyStat>();
+  for (const stat of baseState.daily) {
+    if (ISO_DATE.test(stat.date)) dailyByDate.set(stat.date, stat);
+  }
+  for (const row of remote?.daily ?? []) {
+    const data = asRecord(row);
+    const date = typeof data.date === 'string' ? data.date : '';
+    if (!ISO_DATE.test(date)) continue;
+    const next: DailyStat = {
+      date,
+      done: asCount(data.done),
+      total: asCount(data.total),
+    };
+    const current = dailyByDate.get(date);
+    if (
+      !current ||
+      next.total > current.total ||
+      (next.total === current.total && next.done > current.done)
+    ) {
+      dailyByDate.set(date, next);
+    }
+  }
+
+  const checkins = new Set<string>();
+  for (const day of baseState.checkins) {
+    if (ISO_DATE.test(day)) checkins.add(day);
+  }
+  for (const row of remote?.checkins ?? []) {
+    const day = asRecord(row).raw_text;
+    if (typeof day === 'string' && ISO_DATE.test(day)) checkins.add(day);
+  }
+
+  return {
+    history: history.slice(0, 20),
+    daily: [...dailyByDate.values()]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 30),
+    checkins: [...checkins].sort((a, b) => b.localeCompare(a)),
+  };
+}
+
 export function reconstructFromRemote(remote: RemoteData, baseState: AppState): AppState | null {
   if (!remote) return null;
-  
+
   const { profile, tasks, steps } = remote;
+  const insights = mergeInsights(remote, baseState);
   if (!tasks || tasks.length === 0) {
     // If no tasks but we have profile, just apply profile
     if (profile) {
       return {
         ...baseState,
+        ...insights,
         name: profile.name || baseState.name,
         startH: profile.start_h ?? baseState.startH,
         endH: profile.end_h ?? baseState.endH,
@@ -216,11 +394,8 @@ export function reconstructFromRemote(remote: RemoteData, baseState: AppState): 
     theme: (profile?.theme as AppState['theme']) || baseState.theme,
     onboarded: profile?.onboarded ?? baseState.onboarded,
     tasks: reconstructedTasks,
-    // Keep local history/chat/daily for now, or we could sync them later
     chat: baseState.chat,
-    history: baseState.history,
-    daily: baseState.daily,
-    checkins: baseState.checkins,
+    ...insights,
     lastActiveDate: todayIso(0),
   };
 }

@@ -17,6 +17,7 @@ import {
   fetchRemoteState,
   reconstructFromRemote,
   syncStepsForTask,
+  upsertInsightData,
   upsertProfile,
   upsertTasks,
 } from './lib/db';
@@ -62,7 +63,9 @@ import {
   clearPendingDelete,
   clearState,
   loadPendingDeletes,
+  loadPendingReview,
   loadState,
+  savePendingReview,
   saveState,
 } from './lib/storage';
 import { paletteFor, type Palette } from './theme';
@@ -187,6 +190,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const pendingReviewRef = useRef<PendingCheckInReview | null>(null);
   const clarifyStateRef = useRef<ClarifyState | null>(null);
   const [lastCheckInSource, setLastCheckInSource] = useState<'gemini' | 'offline' | null>(null);
+  const reviewRestore = useRef<string | null>(null);
   const checkInInFlight = useRef(false);
   const checkInGeneration = useRef(0);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -341,6 +345,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 await upsertProfile(userId, migrated);
                 await upsertTasks(userId, migrated.tasks);
                 await Promise.all(migrated.tasks.map(t => syncStepsForTask(userId, t.id, t.steps)));
+                await upsertInsightData(userId, migrated);
                 console.log('[sync] Migrated local data to Supabase');
               } catch (e) {
                 console.warn('[sync] Migration to Supabase failed', e);
@@ -393,6 +398,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [authHydrated, userId, user?.provider]);
 
+  // Restore an unconfirmed check-in after a restart, once per account.
+  useEffect(() => {
+    if (!hydrated || !userId || loadedFor !== userId || reviewRestore.current === userId) {
+      return;
+    }
+    reviewRestore.current = userId;
+    let active = true;
+    void loadPendingReview(userId).then((stored) => {
+      if (!active || !stored || pendingReviewRef.current) return;
+      pendingReviewRef.current = stored;
+      setPendingReview(stored);
+      setReviewError(null);
+    });
+    return () => {
+      active = false;
+    };
+  }, [hydrated, userId, loadedFor]);
+
+  const persistReview = useCallback((review: PendingCheckInReview | null) => {
+    const owner = userIdRef.current;
+    if (!owner) return;
+    void savePendingReview(owner, review);
+  }, []);
+
   // Persist every meaningful change after hydration, with a tiny debounce.
   useEffect(() => {
     if (!hydrated || !userId || loadedFor !== userId) return;
@@ -433,6 +462,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             await upsertTasks(userId, state.tasks);
             // Sync steps per task
             await Promise.all(state.tasks.map(t => syncStepsForTask(userId, t.id, t.steps)));
+            await upsertInsightData(userId, state);
             if (active && sequence === syncSequence.current) {
               setCloudSyncStatus('synced');
             }
@@ -1319,6 +1349,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           pendingReviewRef.current = review;
           setPendingReview(review);
           setReviewError(null);
+          persistReview(review);
           const botMessage: ChatMessage = {
             id: newId('m'),
             from: 'bot',
@@ -1363,6 +1394,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           pendingReviewRef.current = review;
           setPendingReview(review);
           setReviewError(null);
+          persistReview(review);
         } else {
           // Actions or chat turn
           if (parsed.energy) snapshot();
@@ -1377,7 +1409,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [commit, recordAi, snapshot],
+    [commit, persistReview, recordAi, snapshot],
   );
 
   const updateReviewProposal = useCallback(
@@ -1393,8 +1425,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       pendingReviewRef.current = next;
       setPendingReview(next);
       setReviewError(null);
+      persistReview(next);
     },
-    [],
+    [persistReview],
   );
 
   const addReviewProposal = useCallback(() => {
@@ -1417,7 +1450,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     pendingReviewRef.current = next;
     setPendingReview(next);
     setReviewError(null);
-  }, []);
+    persistReview(next);
+  }, [persistReview]);
 
   const removeReviewProposal = useCallback((key: string) => {
     const current = pendingReviewRef.current;
@@ -1429,7 +1463,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     pendingReviewRef.current = next;
     setPendingReview(next);
     setReviewError(null);
-  }, []);
+    persistReview(next);
+  }, [persistReview]);
 
   const cancelTaskReview = useCallback(() => {
     if (!pendingReviewRef.current) return;
@@ -1437,8 +1472,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     clarifyStateRef.current = null;
     setPendingReview(null);
     setReviewError(null);
+    persistReview(null);
     setState((current) => appendReviewCancellation(current));
-  }, []);
+  }, [persistReview]);
 
   const confirmTaskReview = useCallback(() => {
     const review = pendingReviewRef.current;
@@ -1455,6 +1491,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     clarifyStateRef.current = null;
     setPendingReview(null);
     setReviewError(null);
+    persistReview(null);
     const parsed = approvedCheckIn(review);
     const latest = stateRef.current;
     if (parsed.items.length || parsed.energy) snapshot();
@@ -1469,7 +1506,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       setState({ ...latest, chat: [...latest.chat, message] });
     }
-  }, [commit, snapshot]);
+  }, [commit, persistReview, snapshot]);
 
   const completeOnboarding = useCallback(
     async (profile: OnboardingProfile) => {
@@ -1559,6 +1596,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     clarifyStateRef.current = null;
     setPendingReview(null);
     setReviewError(null);
+    persistReview(null);
     nudgeKeyRef.current = '';
     setState(initialState());
     updateTimer(EMPTY_TIMER);
@@ -1566,7 +1604,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setScreen('home');
     setToast(null);
     setStorageWarning(false);
-  }, [updateTimer, user?.provider]);
+  }, [persistReview, updateTimer, user?.provider]);
 
   const resetPreferences = useCallback(() => {
     const current = stateRef.current;

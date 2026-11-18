@@ -195,7 +195,10 @@ def test_guard_clamps_bad_values() -> None:
     expect(task["energy"] == "medium", f"bad energy not defaulted: {task['energy']}")
     expect(task["priority"] == "medium", f"bad priority not defaulted: {task['priority']}")
     expect(task["due"] is None, f"unparseable due not dropped: {task['due']}")
-    expect(task["steps"] == ["Start: Lots of space"], f"missing step not synthesised: {task['steps']}")
+    expect(
+        len(task["steps"]) == 4 and all(step.strip() for step in task["steps"]),
+        f"micro-steps not synthesised: {task['steps']}",
+    )
     expect(body["breakdown"], "empty breakdown should be filled in")
     print(f"[OK] guard clamped bad values: {task}")
 

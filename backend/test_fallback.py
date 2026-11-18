@@ -59,11 +59,25 @@ class FakeClient:
             self.aio = SimpleNamespace(models=FakeAioModels(self.models))
 
 
+class SlowAioModels:
+    """Simulates a model that never answers inside the overall budget."""
+
+    def __init__(self, delay: float):
+        self.delay = delay
+        self.calls = 0
+
+    async def generate_content(self, model, contents, config=None):
+        self.calls += 1
+        await asyncio.sleep(self.delay)
+        return SimpleNamespace(text='{"tasks": [], "breakdown": ""}')
+
+
 def main_check() -> int:
     original_client = main.client
     original_primary = main.MODEL_NAME
     original_fallbacks = main.MODEL_FALLBACKS
     original_timeout = main.GEMINI_TIMEOUT_SECONDS
+    original_total = main.GEMINI_TOTAL_TIMEOUT_SECONDS
 
     try:
         # 1. Primary fails with 503, first fallback succeeds
@@ -133,6 +147,23 @@ def main_check() -> int:
         assert timeout_ms == 30_000, f"expected global 30000 ms, got {timeout_ms}"
         print("[OK] Gemini default timeout also uses milliseconds")
 
+        # 7. A slow chain is cancelled before the app's 60s request timeout.
+        #    The per-attempt wait_for adds a 1s slack, so the fake model must
+        #    hang slightly longer than that for the overall deadline to win.
+        main._model_cooldown_until.clear()
+        main.GEMINI_TOTAL_TIMEOUT_SECONDS = 0.01
+        slow = SlowAioModels(delay=1.2)
+        main.client = SimpleNamespace(
+            models=FakeModels({}), aio=SimpleNamespace(models=slow)
+        )
+        text, used, errors = asyncio.run(main._generate_with_fallback("prompt"))
+        assert text is None and used is None, "slow chain should time out"
+        assert any("total timeout" in error for error in errors), (
+            f"timeout not reported: {errors}"
+        )
+        assert slow.calls == 1, "fallbacks should stop after the budget expires"
+        print("[OK] overall timeout cancels the fallback chain")
+
         print("\n[OK] All fallback cases passed.")
         return 0
     finally:
@@ -140,6 +171,7 @@ def main_check() -> int:
         main.MODEL_NAME = original_primary
         main.MODEL_FALLBACKS = original_fallbacks
         main.GEMINI_TIMEOUT_SECONDS = original_timeout
+        main.GEMINI_TOTAL_TIMEOUT_SECONDS = original_total
 
 
 if __name__ == "__main__":
