@@ -75,12 +75,6 @@ export function CheckInScreen() {
     },
   ];
 
-  const quickActions = [
-    { label: 'Lighter', prompt: 'Make my plan lighter for today' },
-    { label: 'Fewer tasks', prompt: 'Keep only top 2 most important tasks' },
-    { label: 'Move to tomorrow', prompt: 'Move remaining tasks to tomorrow' },
-    { label: 'Ask me one question', prompt: 'Ask me one question to help prioritize' },
-  ];
   const { listening, start, supported } = useVoiceInput({
     onTranscript: (value) => {
       setText((current) => (current.trim() ? `${current} ${value}` : value));
@@ -527,26 +521,6 @@ export function CheckInScreen() {
         </View>
       ) : null}
 
-      <View style={styles.quickActionsContainer}>
-        {quickActions.map((qa) => (
-          <Pressable
-            key={qa.label}
-            accessibilityRole="button"
-            accessibilityLabel={qa.label}
-            disabled={typing}
-            onPress={() => void sendCheckIn(qa.prompt)}
-            style={[
-              styles.quickActionChip,
-              { backgroundColor: colors.surface, borderColor: colors.line },
-            ]}
-          >
-            <Text style={[styles.suggestionChipText, { color: colors.ink }]}>
-              {qa.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
       <View style={[styles.chatbar, { backgroundColor: colors.bg, paddingBottom: Math.max(insets.bottom, 14) }]}>
         <Pressable
           accessibilityRole="button"
@@ -566,7 +540,12 @@ export function CheckInScreen() {
           </View>
         </Pressable>
         {showExamples ? (
-          <View style={styles.compactExamples}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.compactExamples}
+          >
             {examples.map((example) => (
               <Pressable
                 key={example.title}
@@ -581,7 +560,7 @@ export function CheckInScreen() {
                 </Text>
               </Pressable>
             ))}
-          </View>
+          </ScrollView>
         ) : null}
         <View
           style={[
@@ -702,9 +681,8 @@ const styles = StyleSheet.create({
   },
   compactExamples: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    paddingHorizontal: 4,
+    gap: 8,
+    paddingHorizontal: 14,
     paddingBottom: 8,
   },
   compactExample: {
@@ -863,24 +841,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  quickActionsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'flex-start',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingBottom: 8,
-  },
-  quickActionChip: {
-    minHeight: 36,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    alignSelf: 'flex-start',
-    justifyContent: 'center',
-    maxWidth: '100%',
   },
   suggestionChipText: {
     fontFamily: fonts.medium,

@@ -41,8 +41,8 @@ export function InsightsScreen() {
     { value: `${done}/${today.length}`, label: 'Done today' },
     {
       value:
-        availableToday <= 0 && plannedToday > 0
-          ? 'No time left'
+        capacityPercent(state, 'today') > 100
+          ? 'Over capacity'
           : `${capacityPercent(state, 'today')}%`,
       label: 'Capacity today',
     },
