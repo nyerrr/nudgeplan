@@ -11,6 +11,8 @@ generation degrades into something usable instead of breaking the UI.
 
 import asyncio
 import json
+import logging
+import math
 import os
 import posixpath
 import re
@@ -25,9 +27,12 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
-from pydantic import BaseModel, Field
+from google.genai import types as genai_types
+from pydantic import BaseModel, Field, field_validator, model_validator
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+
+logger = logging.getLogger("nudgeplan")
 
 # auth.py reads SUPABASE_* at import time. Load .env first, otherwise starting
 # with `uvicorn main:app` silently disables authentication even though the
@@ -122,6 +127,11 @@ app = FastAPI(
     openapi_url="/openapi.json" if docs_enabled else None,
 )
 
+
+@app.on_event("shutdown")
+async def _close_auth_client() -> None:
+    await supabase_auth.close_http_client()
+
 # Fail closed: only the health/root probes and the optional docs are public.
 # Matching protected prefixes is fragile because an encoded or dot-segment path
 # can dodge a prefix check, so the small set of public paths is listed instead.
@@ -214,6 +224,10 @@ async def _rate_limited(subject: str, limit: int) -> bool:
                 key for key, values in _rate_hits.items() if not values or values[-1] <= cutoff
             ]:
                 _rate_hits.pop(key, None)
+            # Under a wide IP spread, stale buckets may not exist. Drop the
+            # oldest entries so a long-running process stays bounded.
+            while len(_rate_hits) > 4_096:
+                _rate_hits.pop(next(iter(_rate_hits)))
         return False
 
 
@@ -329,17 +343,22 @@ client = genai.Client(api_key=api_key) if api_key else None
 #   gemini-2.0-flash  -> shut down 2026-06-01
 #   gemini-2.5-flash  -> access limited to users who used it before, so a
 #                        brand new API key may be denied
-# Google recommends 3.8 Flash or 3.5 Flash-Lite for new projects.
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+# Cheap and reliable is the right default for a short check-in. 3.8 Flash is
+# kept as a last resort because it is frequently 503 under load.
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 # Tried in order if the primary model is unavailable for this key.
 MODEL_FALLBACKS = [
     m.strip()
     for m in os.getenv(
-        "GEMINI_MODEL_FALLBACKS", "gemini-3.6-flash,gemini-3.5-flash-lite"
+        "GEMINI_MODEL_FALLBACKS", "gemini-3.6-flash,gemini-3.8-flash"
     ).split(",")
     if m.strip()
 ]
+
+# Bound every upstream call so a slow model cannot block the whole event loop.
+GEMINI_TIMEOUT_SECONDS = _env_int("GEMINI_TIMEOUT_SECONDS", 30, 1)
+GEMINI_MAX_OUTPUT_TOKENS = _env_int("GEMINI_MAX_OUTPUT_TOKENS", 2048, 256)
 
 # Port 8001 by default. Port 8000 is probed by local AI tooling (opencode,
 # Ollama, LM Studio) that treats it as a possible OpenAI-compatible LLM
@@ -362,6 +381,15 @@ elif MOCK:
 
 Energy = Literal["low", "medium", "high"]
 Priority = Literal["low", "medium", "high"]
+
+
+def _require_nonblank(value: str) -> str:
+    """Reject whitespace-only input before it reaches a paid model call."""
+    cleaned = value.strip()
+    if not cleaned:
+        raise ValueError("must contain text")
+    return cleaned
+
 
 ALLOWED_LEVELS = {"low", "medium", "high"}
 MAX_TASKS = 8
@@ -411,7 +439,7 @@ class PlannedTask(BaseModel):
 class PlanPayload(BaseModel):
     """The exact JSON shape we ask Gemini to produce."""
 
-    tasks: list[PlannedTask]
+    tasks: list[PlannedTask] = Field(..., max_length=MAX_TASKS)
     breakdown: str = ""
 
 
@@ -419,6 +447,11 @@ class PlanRequest(BaseModel):
     text: str = Field(
         ..., min_length=1, max_length=12_000, description="Raw brain dump from the user."
     )
+
+    @field_validator("text")
+    @classmethod
+    def _text_not_blank(cls, value: str) -> str:
+        return _require_nonblank(value)
 
 
 class PlanResponse(BaseModel):
@@ -456,9 +489,21 @@ class TaskOut(BaseModel):
 
 class CheckInRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=12_000)
-    energy: Energy = "medium"
+    # None means "infer from the dump". An explicit UI selection wins.
+    energy: Energy | None = None
     start_h: int = Field(9, ge=0, le=23)
     end_h: int = Field(18, ge=1, le=24)
+
+    @field_validator("text")
+    @classmethod
+    def _text_not_blank(cls, value: str) -> str:
+        return _require_nonblank(value)
+
+    @model_validator(mode="after")
+    def _valid_window(self) -> "CheckInRequest":
+        if self.end_h <= self.start_h:
+            raise ValueError("end_h must be later than start_h")
+        return self
 
 
 class CheckInResponse(BaseModel):
@@ -475,7 +520,7 @@ class MicroStep(BaseModel):
 
 
 class StepPayload(BaseModel):
-    steps: list[MicroStep] = Field(default_factory=list)
+    steps: list[MicroStep] = Field(default_factory=list, max_length=MAX_STEPS)
 
 
 class StepsRequest(BaseModel):
@@ -490,6 +535,11 @@ class StepsRequest(BaseModel):
     dur: int = Field(
         45, ge=5, le=480, description="How long the user has for the whole task."
     )
+
+    @field_validator("title")
+    @classmethod
+    def _title_not_blank(cls, value: str) -> str:
+        return _require_nonblank(value)
 
 
 class StepsResponse(BaseModel):
@@ -537,11 +587,11 @@ async def plan_tasks(req: PlanRequest):
             model="offline-planner",
         )
 
-    raw, used_model, errors = _generate_with_fallback(build_prompt(req.text))
+    raw, used_model, errors = await _generate_with_fallback(build_prompt(req.text))
     if raw is None:
         # Keep upstream error text (model names, quota details) in the server
         # log instead of returning it to the caller.
-        print("[ERROR] All Gemini models failed: " + "; ".join(errors))
+        logger.error("All Gemini models failed for /ai/plan: %s", "; ".join(errors))
         raise HTTPException(
             status_code=502,
             detail=(
@@ -559,7 +609,7 @@ async def plan_tasks(req: PlanRequest):
     )
 
 
-def _steps_response(title: str, effort: str, dur: int) -> StepsResponse:
+async def _steps_response(title: str, effort: str, dur: int) -> StepsResponse:
     """Generate guarded steps for the app route and the legacy alias."""
     clean_title = _clean_text(title, 160) or "Start with the smallest move."
     offline = _steps_from_offline(clean_title, dur)
@@ -572,15 +622,16 @@ def _steps_response(title: str, effort: str, dur: int) -> StepsResponse:
             model="offline-planner",
         )
 
-    raw, used_model, errors = _generate_with_fallback(
+    raw, used_model, errors = await _generate_with_fallback(
         build_steps_prompt(clean_title, effort, dur),
         schema=StepPayload,
     )
     if raw is None:
         # Degrading beats failing here: the user still gets usable steps.
+        logger.warning("All Gemini models failed for /plan/steps: %s", "; ".join(errors))
         return StepsResponse(
             steps=offline,
-            raw="; ".join(errors),
+            raw="(offline fallback - AI unavailable)",
             source="offline",
             model=None,
         )
@@ -600,7 +651,7 @@ def _steps_response(title: str, effort: str, dur: int) -> StepsResponse:
 @app.post("/ai/steps", response_model=StepsResponse)
 async def ai_steps(req: StepsRequest):
     """Backward-compatible alias for the app's /plan/steps route."""
-    return _steps_response(req.title, req.effort, req.dur)
+    return await _steps_response(req.title, req.effort, req.dur)
 
 
 @app.post("/plan/checkin", response_model=CheckInResponse)
@@ -615,10 +666,11 @@ async def plan_checkin(req: CheckInRequest):
         tasks, breakdown = _normalise_plan(planner.breakdown(req.text))
         return _checkin_response(req, tasks, breakdown, "offline", None)
 
-    raw, used_model, errors = _generate_with_fallback(
+    raw, used_model, errors = await _generate_with_fallback(
         build_checkin_prompt(req.text, req.start_h, req.end_h)
     )
     if raw is None:
+        logger.warning("All Gemini models failed for /plan/checkin: %s", "; ".join(errors))
         tasks, breakdown = _normalise_plan(planner.breakdown(req.text))
         return _checkin_response(req, tasks, breakdown, "offline", None)
 
@@ -629,7 +681,7 @@ async def plan_checkin(req: CheckInRequest):
 @app.post("/plan/steps", response_model=StepsResponse)
 async def plan_steps(req: StepsRequest):
     """Break one task into Micro-Step Guard-approved steps."""
-    return _steps_response(req.title, req.effort, req.dur)
+    return await _steps_response(req.title, req.effort, req.dur)
 
 
 PROMPT_TEMPLATE = """You are the NudgePlan planning assistant. The user dumped \
@@ -779,22 +831,37 @@ def build_steps_prompt(title: str, effort: str, dur: int) -> str:
     )
 
 
-def _generate_with_fallback(
+async def _generate_once(prompt: str, schema: type[BaseModel], model: str) -> str:
+    """Call one model without blocking the event loop."""
+    config = {
+        "response_mime_type": "application/json",
+        "response_schema": schema,
+        "max_output_tokens": GEMINI_MAX_OUTPUT_TOKENS,
+        "http_options": genai_types.HttpOptions(timeout=GEMINI_TIMEOUT_SECONDS),
+    }
+    aio_models = getattr(getattr(client, "aio", None), "models", None)
+    if aio_models is not None:
+        response = await aio_models.generate_content(
+            model=model, contents=prompt, config=config
+        )
+    else:
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=model,
+            contents=prompt,
+            config=config,
+        )
+    return response.text or ""
+
+
+async def _generate_with_fallback(
     prompt: str, schema: type[BaseModel] = PlanPayload
 ) -> tuple[str | None, str | None, list[str]]:
     """Try each model in turn, returning (text, model_used, errors)."""
     errors: list[str] = []
     for model in [MODEL_NAME, *MODEL_FALLBACKS]:
         try:
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config={
-                    "response_mime_type": "application/json",
-                    "response_schema": schema,
-                },
-            )
-            text = response.text or ""
+            text = await _generate_once(prompt, schema, model)
             if text.strip():
                 return text, model, errors
             errors.append(f"{model}: empty response")
@@ -816,14 +883,16 @@ def _parse_json(text: str) -> dict:
         if "\n" in cleaned:
             cleaned = cleaned.split("\n", 1)[-1]
     try:
-        parsed = json.loads(cleaned)
+        parsed = json.loads(cleaned, parse_constant=lambda _: None)
     except json.JSONDecodeError:
         # Some models wrap the object in prose. Try the outermost braces.
         start, end = cleaned.find("{"), cleaned.rfind("}")
         if start == -1 or end <= start:
             return {}
         try:
-            parsed = json.loads(cleaned[start : end + 1])
+            parsed = json.loads(
+                cleaned[start : end + 1], parse_constant=lambda _: None
+            )
         except json.JSONDecodeError:
             return {}
     return parsed if isinstance(parsed, dict) else {}
@@ -863,14 +932,25 @@ def _normalise_task(entry: object) -> PlannedTask | None:
     if not title:
         return None
 
+    start_value = entry.get("start")
+    if start_value is None:
+        start_value = entry.get("start_time")
+
+    steps = _coerce_steps(entry.get("steps"), title)
+    if steps and VAGUE_FIRST_RE.search(steps[0]):
+        setup_steps = planner.make_steps(title)
+        replacement = _clean_text(setup_steps[0] if setup_steps else "", 120)
+        if replacement and replacement not in steps:
+            steps[0] = replacement
+
     return PlannedTask(
         title=title,
         minutes=_coerce_minutes(entry.get("minutes")),
         energy=_coerce_level(entry.get("energy"), "medium"),
         priority=_coerce_level(entry.get("priority"), "medium"),
         due=_coerce_due(entry.get("due")),
-        start=_coerce_start(entry.get("start") or entry.get("start_time")),
-        steps=_coerce_steps(entry.get("steps"), title),
+        start=_coerce_start(start_value),
+        steps=steps,
     )
 
 
@@ -881,12 +961,20 @@ def _clean_text(value: object, limit: int) -> str:
     return text[:limit]
 
 
-def _coerce_minutes(value: object) -> int:
+def _finite_float(value: object) -> float | None:
+    """Convert a model-supplied number, rejecting NaN and infinities."""
     try:
-        minutes = int(float(value))  # accepts 25, "25", 25.4
-    except (TypeError, ValueError):
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _coerce_minutes(value: object) -> int:
+    number = _finite_float(value)  # accepts 25, "25", 25.4
+    if number is None:
         return 20
-    minutes = max(MIN_MINUTES, min(MAX_MINUTES, minutes))
+    minutes = max(MIN_MINUTES, min(MAX_MINUTES, int(number)))
     # Round to the nearest 5: estimates are not precise and never should look so.
     return max(MIN_MINUTES, int(round(minutes / 5.0)) * 5)
 
@@ -980,7 +1068,10 @@ def _coerce_start(value: object) -> str | None:
     if value is None:
         return None
     if isinstance(value, (int, float)):
-        minutes = int(value)
+        number = _finite_float(value)
+        if number is None:
+            return None
+        minutes = int(number)
         if 0 <= minutes < 24 * 60:
             return f"{minutes // 60:02d}:{minutes % 60:02d}"
         return None
@@ -1040,10 +1131,8 @@ def _detect_energy(text: str) -> Energy | None:
 
 
 def _clamp_step_minutes(value: object, default: int = 5) -> int:
-    try:
-        minutes = int(float(value))
-    except (TypeError, ValueError):
-        minutes = default
+    number = _finite_float(value)
+    minutes = int(number) if number is not None else default
     minutes = max(2, min(20, minutes))
     if minutes <= 5:
         return max(2, minutes)
@@ -1094,7 +1183,9 @@ def _fit_step_minutes(minutes: list[int], total: int) -> list[int]:
     return fitted
 
 
-def _steps_from_texts(texts: list[str], total_minutes: int) -> list[StepOut]:
+def _steps_from_texts(
+    texts: list[str], total_minutes: int, title: str = ""
+) -> list[StepOut]:
     cleaned: list[str] = []
     for text in texts:
         value = _clean_text(text, 120)
@@ -1104,6 +1195,12 @@ def _steps_from_texts(texts: list[str], total_minutes: int) -> list[StepOut]:
             break
     if not cleaned:
         return []
+
+    if VAGUE_FIRST_RE.search(cleaned[0]):
+        setup_steps = planner.make_steps(title or cleaned[0])
+        replacement = _clean_text(setup_steps[0] if setup_steps else "", 120)
+        if replacement and not VAGUE_FIRST_RE.search(replacement):
+            cleaned[0] = replacement
 
     raw_minutes = [
         _minutes_for_step(text, total_minutes, len(cleaned), index)
@@ -1117,7 +1214,7 @@ def _steps_from_texts(texts: list[str], total_minutes: int) -> list[StepOut]:
 
 
 def _steps_from_offline(title: str, dur: int) -> list[StepOut]:
-    return _steps_from_texts(planner.make_steps(title), dur)
+    return _steps_from_texts(planner.make_steps(title), dur, title)
 
 
 def _normalise_steps(parsed: dict, title: str, dur: int) -> list[StepOut]:
@@ -1188,7 +1285,7 @@ def _task_out(task: PlannedTask) -> TaskOut:
     # is only useful for dates beyond that immediate window.
     due_date = due if due and due > tomorrow else None
     start = _clock_to_minutes(task.start)
-    steps = _steps_from_texts(task.steps, task.minutes)
+    steps = _steps_from_texts(task.steps, task.minutes, task.title)
     return TaskOut(
         title=task.title,
         dur=task.minutes,
@@ -1214,7 +1311,7 @@ def _checkin_response(
     items = [_task_out(task) for task in tasks]
     return CheckInResponse(
         items=items,
-        energy=_detect_energy(req.text),
+        energy=req.energy or _detect_energy(req.text),
         reply=breakdown.strip(),
         source=source,
         model=model,

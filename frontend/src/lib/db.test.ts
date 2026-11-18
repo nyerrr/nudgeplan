@@ -9,7 +9,7 @@ vi.mock('./supabase', () => ({
   supabase: { from: mockFrom },
 }));
 
-import { upsertProfile } from './db';
+import { deleteAllUserDataRemote, upsertProfile } from './db';
 import { initialState } from './engine';
 
 describe('Supabase write errors', () => {
@@ -24,5 +24,18 @@ describe('Supabase write errors', () => {
 
     await expect(upsertProfile('user-1', initialState())).rejects.toBe(error);
     expect(mockFrom).toHaveBeenCalledWith('profiles');
+  });
+
+  it('does not report a full account delete as successful when one table fails', async () => {
+    const error = new Error('permission denied');
+    mockFrom.mockImplementation((table: string) => ({
+      upsert: mockUpsert,
+      delete: () => ({
+        eq: () => Promise.resolve({ error: table === 'tasks' ? error : null }),
+      }),
+    }));
+
+    await expect(deleteAllUserDataRemote('user-1')).rejects.toBe(error);
+    expect(mockFrom).toHaveBeenCalledWith('tasks');
   });
 });

@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -49,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [justSignedOut, setJustSignedOut] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const userTouched = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -71,8 +73,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (active) setAuthError(message);
       }
 
-      const session = await Promise.race([loadAuthSession(), timeout]);
-      if (active && session) setUser(session.user);
+      const sessionPromise = loadAuthSession();
+      // The 5s race keeps the app usable, but a slow provider must still be
+      // allowed to sign the user in once it finally answers.
+      sessionPromise
+        .then((late) => {
+          if (active && late && !userTouched.current) setUser(late.user);
+        })
+        .catch(() => {
+          // A failed lookup just means "not signed in".
+        });
+
+      const session = await Promise.race([sessionPromise, timeout]);
+      if (active && session && !userTouched.current) setUser(session.user);
     })()
       .catch(() => {
         // A failed lookup just means "not signed in".
@@ -92,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(
     () =>
       onAuthStateChange((next) => {
+        userTouched.current = true;
         if (next) {
           setJustSignedOut(false);
           setUser((current) =>
@@ -111,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const persistUser = useCallback(async (next: AuthUser) => {
+    userTouched.current = true;
     setJustSignedOut(false);
     setUser(next);
     await saveAuthSession(next);
@@ -142,6 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     const wasSignedIn =
       user?.provider === 'google' || user?.provider === 'email';
+    userTouched.current = true;
     setUser(null);
     setJustSignedOut(wasSignedIn);
     await clearAuthSession();

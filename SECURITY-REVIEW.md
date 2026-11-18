@@ -38,3 +38,25 @@ move it to Redis or the hosting platform's edge. Supabase sessions are stored in
 AsyncStorage/localStorage; on web, a successful XSS could read them, so keep the
 frontend free of untrusted HTML injection. Centralized logging and secret
 rotation still need to be configured at the deployment layer.
+
+## Follow-up hardening (2026-11-18)
+
+- Authentication now fails closed on unknown paths, rejects chunked request
+  bodies with 411, validates `Content-Length`, and requires a strong static
+  token before any non-loopback bind.
+- Supabase verification uses one pooled HTTP client, requires the anon key
+  whenever `SUPABASE_URL` is set, and type-checks the user payload.
+- Gemini calls are awaited asynchronously with a 30s per-model timeout and a
+  2048-token output cap; upstream error text is logged, not returned.
+- Model-supplied `NaN`/`Infinity` values are rejected, whitespace-only input is
+  a 422, and the Micro-Step Guard now covers check-in and plan steps.
+- Native auth uses PKCE on every platform, and Android backup plus the system
+  alert-window permission are disabled.
+- Account reset queues a full remote deletion and surfaces sync failures with
+  a retry action in Profile.
+- RLS is now FORCE on every user table, steps have a cascade FK to tasks, and
+  the verification query checks policy counts too.
+- Startup logs no longer advertise docs endpoints that are disabled in prod.
+
+The process-local rate limiter, session storage on the client, and missing
+centralized logging/secret rotation remain deployment-level limitations.

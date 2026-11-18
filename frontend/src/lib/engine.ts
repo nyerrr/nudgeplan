@@ -143,6 +143,8 @@ const GENERIC_STEPS: Array<[string, number]> = [
 ];
 
 export const DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240];
+/** Chat is a UI transcript, not an archive; keep sync payloads bounded. */
+export const MAX_CHAT_MESSAGES = 50;
 
 /** Scheduling grid, in minutes. */
 const SLOT_MIN = 15;
@@ -1120,7 +1122,10 @@ export function applyCheckIn(
       ],
     };
     return {
-      state: { ...state, chat: [...state.chat, message] },
+      state: {
+        ...state,
+        chat: [...state.chat, message].slice(-MAX_CHAT_MESSAGES),
+      },
       message,
     };
   }
@@ -1215,7 +1220,7 @@ export function applyCheckIn(
     tasks,
     energy,
     focusId: stuck?.id ?? state.focusId,
-    chat: [...state.chat, message],
+    chat: [...state.chat, message].slice(-MAX_CHAT_MESSAGES),
     checkins: chatDays,
   };
 

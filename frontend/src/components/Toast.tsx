@@ -13,6 +13,7 @@ export function Toast() {
   return (
     <View
       pointerEvents="box-none"
+      accessibilityLiveRegion="polite"
       style={[
         styles.wrap,
         { bottom: Math.max(86, insets.bottom + 76), left: 14, right: 14 },

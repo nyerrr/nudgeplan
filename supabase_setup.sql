@@ -33,6 +33,15 @@ alter table if exists public.history enable row level security;
 alter table if exists public.daily_stats enable row level security;
 alter table if exists public.checkins enable row level security;
 
+-- Owners must obey RLS too. Supabase's service role keeps its BYPASSRLS
+-- privilege, so administrative jobs are unaffected.
+alter table if exists public.profiles force row level security;
+alter table if exists public.tasks force row level security;
+alter table if exists public.steps force row level security;
+alter table if exists public.history force row level security;
+alter table if exists public.daily_stats force row level security;
+alter table if exists public.checkins force row level security;
+
 drop policy if exists "profiles_owner_all" on public.profiles;
 create policy "profiles_owner_all"
   on public.profiles
@@ -97,17 +106,42 @@ create index if not exists history_user_created_idx on public.history (user_id, 
 create index if not exists daily_stats_user_date_idx on public.daily_stats (user_id, date desc);
 create index if not exists checkins_user_created_idx on public.checkins (user_id, created_at desc);
 
+-- A step without its task can never be scheduled. Add the cascade when it is
+-- missing; clean up orphan rows first if this statement reports a violation.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint c
+    join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey)
+    where c.conrelid = 'public.steps'::regclass
+      and c.confrelid = 'public.tasks'::regclass
+      and a.attname = 'task_id'
+      and c.contype = 'f'
+  ) then
+    alter table public.steps
+      add constraint steps_task_id_fkey
+      foreign key (task_id) references public.tasks(id) on delete cascade;
+  end if;
+end $$;
+
 -- Step 6: the trigger function only runs from the auth.users trigger. Remove
 -- the default PUBLIC execute grant so it cannot be called through the API.
 revoke all on function public.handle_new_user() from public;
 revoke all on function public.handle_new_user() from anon, authenticated;
 
--- Step 7: verification. Every row must show relrowsecurity = true.
--- Run this after the statements above and fix anything that is false.
-select relname, relrowsecurity
-from pg_class
-where relnamespace = 'public'::regnamespace
-  and relname in (
+-- Step 7: verification. Every row must show relrowsecurity = true,
+-- relforcerowsecurity = true, and at least one RLS policy. Investigate any
+-- table that is missing or has zero policies.
+select
+  c.relname,
+  c.relrowsecurity,
+  c.relforcerowsecurity,
+  count(p.polname) as policies
+from pg_class c
+left join pg_policy p on p.polrelid = c.oid
+where c.relnamespace = 'public'::regnamespace
+  and c.relname in (
     'profiles',
     'tasks',
     'steps',
@@ -115,4 +149,5 @@ where relnamespace = 'public'::regnamespace
     'daily_stats',
     'checkins'
   )
-order by relname;
+group by c.oid, c.relname, c.relrowsecurity, c.relforcerowsecurity
+order by c.relname;

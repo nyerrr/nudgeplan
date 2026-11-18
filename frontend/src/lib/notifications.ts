@@ -162,6 +162,8 @@ export async function snoozeTaskNudge(
   if (!(await notificationPermissionGranted())) return false;
   try {
     await ensureChannels();
+    // Replacing the nudge instead of stacking it avoids duplicate reminders.
+    await cancelKind('nudge');
     const at = new Date(Date.now() + Math.max(1, minutes) * 60_000);
     await Notifications.scheduleNotificationAsync({
       content: {

@@ -357,9 +357,12 @@ export function Meter({
   style?: StyleProp<ViewStyle>;
 }) {
   const { colors } = useApp();
+  const value = Math.max(0, Math.min(100, percent));
 
   return (
     <View
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: 100, now: value }}
       style={[
         styles.meter,
         {
@@ -372,7 +375,7 @@ export function Meter({
     >
       <View
         style={{
-          width: `${Math.max(0, Math.min(100, percent))}%`,
+          width: `${value}%`,
           height: '100%',
           borderRadius: height,
           backgroundColor: color,

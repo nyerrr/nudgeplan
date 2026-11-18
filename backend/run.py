@@ -22,12 +22,9 @@ HOST = os.getenv("HOST", "127.0.0.1")
 API_AUTH_TOKEN = os.getenv("API_AUTH_TOKEN", "").strip()
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
-AUTH_REQUIRED = os.getenv("AUTH_REQUIRED", "true").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
+_TRUTHY = {"1", "true", "yes", "on"}
+AUTH_REQUIRED = os.getenv("AUTH_REQUIRED", "true").strip().lower() in _TRUTHY
+ENABLE_DOCS = os.getenv("ENABLE_DOCS", "").strip().lower() in _TRUTHY
 
 
 def _is_loopback(host: str) -> bool:
@@ -57,7 +54,10 @@ def main() -> int:
             return 1
 
     print(f"[INFO] NudgePlan API on http://{HOST}:{PORT}")
-    print("[INFO] Docs at http://{0}:{1}/docs".format(HOST, PORT))
+    if ENABLE_DOCS or not supabase_ready:
+        print("[INFO] Docs at http://{0}:{1}/docs".format(HOST, PORT))
+    else:
+        print("[INFO] API docs are disabled (Supabase auth is enabled).")
     if reload_flag:
         print("[INFO] Auto-reload enabled.")
 

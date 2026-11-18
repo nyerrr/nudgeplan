@@ -29,6 +29,7 @@ import {
   fmtDuration,
   generateSteps,
   initialState,
+  MAX_CHAT_MESSAGES,
   movesNeeded,
   moveTasks,
   newId,
@@ -199,6 +200,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!authHydrated) return;
     let active = true;
+
+    // Never let a different account inherit the previous timer/reminders.
+    void cancelTaskNudges();
+    void cancelTimerNotification();
+    setTimer(EMPTY_TIMER);
+    nudgeKeyRef.current = '';
 
     if (!userId) {
       setState(initialState());
@@ -1003,7 +1010,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       setState((current) => ({
         ...current,
-        chat: [...current.chat, userMessage],
+        chat: [...current.chat, userMessage].slice(-MAX_CHAT_MESSAGES),
       }));
       setTyping(true);
 
@@ -1028,7 +1035,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const latest = stateRef.current;
       const base = latest.chat.some((message) => message.id === userMessage.id)
         ? latest
-        : { ...latest, chat: [...latest.chat, userMessage] };
+        : {
+            ...latest,
+            chat: [...latest.chat, userMessage].slice(-MAX_CHAT_MESSAGES),
+          };
       const applied = applyCheckIn(base, parsed);
       commit(applied.state);
       setTyping(false);

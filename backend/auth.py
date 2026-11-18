@@ -24,6 +24,12 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
 
+if SUPABASE_URL and not SUPABASE_ANON_KEY:
+    raise RuntimeError(
+        "SUPABASE_ANON_KEY is required when SUPABASE_URL is set. "
+        "Remove SUPABASE_URL for a local open-dev setup."
+    )
+
 if SUPABASE_URL:
     _parsed = urlparse(SUPABASE_URL)
     _local_host = _parsed.hostname in {"localhost", "127.0.0.1", "::1"}
@@ -42,6 +48,27 @@ AUTH_REQUIRED = os.getenv("AUTH_REQUIRED", "true").strip().lower() in _TRUTHY
 _CACHE_TTL = 60.0
 _CACHE_MAX = 512
 _cache: dict[str, tuple[float, str]] = {}
+_http_client: httpx.AsyncClient | None = None
+
+
+def _client() -> httpx.AsyncClient:
+    """Reuse one pooled connection across token verifications."""
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            timeout=6.0,
+            follow_redirects=False,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+        )
+    return _http_client
+
+
+async def close_http_client() -> None:
+    """Close the pooled verifier on app shutdown."""
+    global _http_client
+    if _http_client is not None and not _http_client.is_closed:
+        await _http_client.aclose()
+    _http_client = None
 
 
 def auth_enabled() -> bool:
@@ -106,10 +133,9 @@ async def user_id_for_token(token: str) -> tuple[str | None, str | None]:
         headers["apikey"] = SUPABASE_ANON_KEY
 
     try:
-        async with httpx.AsyncClient(timeout=6.0, follow_redirects=False) as client:
-            response = await client.get(
-                f"{SUPABASE_URL}/auth/v1/user", headers=headers
-            )
+        response = await _client().get(
+            f"{SUPABASE_URL}/auth/v1/user", headers=headers
+        )
     except httpx.HTTPError:
         return None, "Could not reach Supabase to verify your session."
 
@@ -119,6 +145,9 @@ async def user_id_for_token(token: str) -> tuple[str | None, str | None]:
     try:
         payload = response.json()
     except ValueError:
+        return None, "Supabase returned an unexpected response."
+
+    if not isinstance(payload, dict):
         return None, "Supabase returned an unexpected response."
 
     user_id = payload.get("id")

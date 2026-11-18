@@ -60,7 +60,7 @@ export function CheckInScreen() {
   }, [state.chat.length, typing]);
 
   const submit = () => {
-    if (!text.trim()) return;
+    if (typing || !text.trim()) return;
     const value = text;
     setText('');
     void sendCheckIn(value);
@@ -306,6 +306,7 @@ export function CheckInScreen() {
             value={text}
             onChangeText={setText}
             onSubmitEditing={submit}
+            editable={!typing}
             placeholder={listening ? 'Listening...' : 'Tell me about your day...'}
             placeholderTextColor={colors.muted}
             selectionColor={colors.brand}
@@ -338,8 +339,13 @@ export function CheckInScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Send"
+            accessibilityState={{ disabled: typing }}
+            disabled={typing}
             onPress={submit}
-            style={[styles.round, { backgroundColor: colors.brand }]}
+            style={[
+              styles.round,
+              { backgroundColor: colors.brand, opacity: typing ? 0.5 : 1 },
+            ]}
           >
             <Icon name="send" size={18} color={colors.onBrand} />
           </Pressable>

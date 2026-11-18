@@ -107,11 +107,16 @@ export function TaskSheet() {
   const onBreakdown = async () => {
     if (!task) return;
     setWorking(true);
-    const count = await breakIntoSteps(task.id);
-    setWorking(false);
-    closeTaskSheet();
-    go('focus');
-    notify(`Split into ${count} small steps.`);
+    try {
+      const count = await breakIntoSteps(task.id);
+      closeTaskSheet();
+      go('focus');
+      notify(`Split into ${count} small steps.`);
+    } catch {
+      notify('Could not split this task. Try again.');
+    } finally {
+      setWorking(false);
+    }
   };
 
   const addToCalendar = () => {

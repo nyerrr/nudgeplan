@@ -43,6 +43,7 @@ export function HomeScreen() {
     notify,
     setFocus,
     moveN,
+    typing,
     snoozeNudge,
     openTaskSheet,
   } = useApp();
@@ -61,7 +62,7 @@ export function HomeScreen() {
   const upcoming = upcomingTasks(state.tasks, 3);
 
   const submit = () => {
-    if (!text.trim()) return;
+    if (typing || !text.trim()) return;
     const value = text;
     setText('');
     void sendCheckIn(value);
@@ -136,6 +137,7 @@ export function HomeScreen() {
           value={text}
           onChangeText={setText}
           onSubmitEditing={submit}
+          editable={!typing}
           placeholder={listening ? 'Listening...' : 'What’s on your mind?'}
           placeholderTextColor={colors.muted}
           selectionColor={colors.brand}
@@ -168,8 +170,13 @@ export function HomeScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Send"
+          accessibilityState={{ disabled: typing }}
+          disabled={typing}
           onPress={submit}
-          style={[styles.round, { backgroundColor: colors.brand }]}
+          style={[
+            styles.round,
+            { backgroundColor: colors.brand, opacity: typing ? 0.5 : 1 },
+          ]}
         >
           <Icon name="send" size={18} color={colors.onBrand} />
         </Pressable>
@@ -452,9 +459,7 @@ export function HomeScreen() {
                     small
                     ghost
                     label="Later"
-                    onPress={() =>
-                      notify('Okay. I will nudge you again in 15 minutes.')
-                    }
+                    onPress={() => void snoozeNudge(next.id, 15)}
                   />
                 </View>
               </>

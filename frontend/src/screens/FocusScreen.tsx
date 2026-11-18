@@ -74,9 +74,14 @@ export function FocusScreen() {
   const breakdown = async () => {
     if (!selected) return;
     setBreaking(true);
-    const count = await breakIntoSteps(selected.id);
-    setBreaking(false);
-    notify(`Split into ${count} small steps.`);
+    try {
+      const count = await breakIntoSteps(selected.id);
+      notify(`Split into ${count} small steps.`);
+    } catch {
+      notify('Could not split this task. Try again.');
+    } finally {
+      setBreaking(false);
+    }
   };
 
   const submitStep = () => {

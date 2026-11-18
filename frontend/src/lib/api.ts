@@ -140,7 +140,10 @@ export async function requestCheckIn(
     start_h: startH,
     end_h: endH,
   });
-  if (!data || !Array.isArray(data.items) || data.items.length === 0) {
+  if (!data || !Array.isArray(data.items)) return null;
+  // An empty plan can still carry a useful energy reading or reply. Only fall
+  // back to the local parser when the response is completely empty.
+  if (data.items.length === 0 && !data.energy && !data.reply?.trim()) {
     return null;
   }
   return data;

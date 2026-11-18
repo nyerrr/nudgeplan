@@ -50,18 +50,11 @@ export function TaskRow({
         </View>
       ) : null}
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Edit ${task.title}`}
-        onPress={() => openTaskSheet(task.id)}
-        style={({ pressed }) => [
+      <View
+        style={[
           styles.card,
           elevationStyle(colors),
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.line,
-            opacity: pressed ? 0.88 : 1,
-          },
+          { backgroundColor: colors.surface, borderColor: colors.line },
         ]}
       >
         <Pressable
@@ -89,42 +82,49 @@ export function TaskRow({
           </View>
         </Pressable>
 
-        <View style={styles.body}>
-          <Text
-            style={[
-              styles.title,
-              {
-                color: task.done ? colors.muted : colors.ink,
-                textDecorationLine: task.done ? 'line-through' : 'none',
-              },
-            ]}
-          >
-            {task.title}
-          </Text>
-          <View style={styles.meta}>
-            <EffortPill effort={task.effort} />
-            <Text style={[styles.metaText, { color: colors.muted }]}>
-              {fmtDuration(task.dur)}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Edit ${task.title}`}
+          onPress={() => openTaskSheet(task.id)}
+          style={({ pressed }) => [styles.editHit, { opacity: pressed ? 0.88 : 1 }]}
+        >
+          <View style={styles.body}>
+            <Text
+              style={[
+                styles.title,
+                {
+                  color: task.done ? colors.muted : colors.ink,
+                  textDecorationLine: task.done ? 'line-through' : 'none',
+                },
+              ]}
+            >
+              {task.title}
             </Text>
-            {task.steps.length ? (
+            <View style={styles.meta}>
+              <EffortPill effort={task.effort} />
               <Text style={[styles.metaText, { color: colors.muted }]}>
-                {doneSteps}/{task.steps.length} steps
+                {fmtDuration(task.dur)}
               </Text>
-            ) : null}
-            {task.dueDate ? (
-              <Text
-                style={[
-                  styles.metaText,
-                  { color: colors.brand, fontFamily: fonts.semibold },
-                ]}
-              >
-                Due {dueDateLabel(task.dueDate)}
-              </Text>
-            ) : null}
+              {task.steps.length ? (
+                <Text style={[styles.metaText, { color: colors.muted }]}>
+                  {doneSteps}/{task.steps.length} steps
+                </Text>
+              ) : null}
+              {task.dueDate ? (
+                <Text
+                  style={[
+                    styles.metaText,
+                    { color: colors.brand, fontFamily: fonts.semibold },
+                  ]}
+                >
+                  Due {dueDateLabel(task.dueDate)}
+                </Text>
+              ) : null}
+            </View>
           </View>
-        </View>
-        <Icon name="chevron-forward" size={17} color={colors.muted} />
-      </Pressable>
+          <Icon name="chevron-forward" size={17} color={colors.muted} />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -158,6 +158,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 11,
     paddingHorizontal: 12,
+  },
+  editHit: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   checkHit: {
     width: 44,

@@ -11,7 +11,7 @@ Use two separate PowerShell terminals from the repository root.
 ### Terminal 1: Backend
 
 ```powershell
-cd C:\Users\Dave\nudgeplan\backend  
+cd backend
 
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -31,7 +31,7 @@ The default `.env` uses offline mode, so a Gemini API key is not required.
 ### Terminal 2: Frontend
 
 ```powershell
-cd C:\Users\Dave\nudgeplan\frontend
+cd frontend
 npm install
 npx expo start --web
 ```
@@ -177,9 +177,13 @@ src/theme.ts                Light/dark palettes and typography
 src/types.ts                Shared types
 src/lib/engine.ts           Parsing, energy curve, scheduling, Reality Check, steps
 src/lib/api.ts              Backend calls with timeout and null fallback
-src/lib/storage.ts          AsyncStorage load/save
+src/lib/storage.ts          AsyncStorage load/save and pending deletes
+src/lib/supabase.ts         Supabase client and PKCE auth config
+src/lib/db.ts               Remote fetch/upsert/delete and state reconstruction
+src/auth.tsx                Session restore and sign-in provider
 src/components/             UI kit, task rows, tab bar, toast, task sheet
-src/screens/                Home, Plan, Check-in, Focus, Insights, Profile, About
+src/screens/                Home, Plan, Check-in, Focus, Insights, Profile, About,
+                            Login, Privacy, Onboarding
 ```
 
 ## Testing and checks

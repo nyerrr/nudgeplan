@@ -174,10 +174,17 @@ testers get a short beta review. Internal testers skip review entirely.
 | --- | --- | --- |
 | `GEMINI_API_KEY` | Render only | Never in the app or git. |
 | `SUPABASE_URL` | Render + `frontend/.env` | Public. |
-| `SUPABASE_ANON_KEY` | Render + `frontend/eas.json` | Public by design; RLS is the real guard. |
-| `EXPO_PUBLIC_API_URL` | `frontend/eas.json` | Must be HTTPS in builds. |
+| `SUPABASE_ANON_KEY` | Render + `frontend/.env` / EAS env | Public by design; RLS is the real guard. |
+| `EXPO_PUBLIC_API_URL` | `frontend/.env` / EAS env | Must be HTTPS in builds. Keep one value per environment. |
+| `GEMINI_MODEL` | Render (optional) | Cheap default: `gemini-3.5-flash-lite`. |
+| `GEMINI_MODEL_FALLBACKS` | Render (optional) | Comma-separated, tried in order on 503. |
+| `GEMINI_TIMEOUT_SECONDS` | Render (optional) | Per-model timeout, default 30. |
+| `GEMINI_MAX_OUTPUT_TOKENS` | Render (optional) | Output cap, default 2048. |
 | `API_AUTH_TOKEN` | local backend only | Static fallback for self-hosting without Supabase. Ignored when Supabase is configured; never put it in the app. |
-| `AI_RATE_LIMIT` | Render (optional) | Requests per user/IP per window. Defaults to 30/minute. |
+| `AI_RATE_LIMIT` / `AI_IP_RATE_LIMIT` | Render (optional) | Per-user and per-IP request caps. Defaults to 30 and 150 per minute. |
+| `AI_RATE_WINDOW_SECONDS` | Render (optional) | Rate-limit window, default 60 seconds. |
+| `MAX_REQUEST_BYTES` | Render (optional) | Request body cap, default 65536. |
+| `CORS_ORIGINS` | Render | Exact browser origins; no wildcards. |
 | `ENABLE_DOCS` | Render (optional) | Leave unset; docs are hidden in production. |
 
 ---

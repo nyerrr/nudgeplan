@@ -28,7 +28,7 @@ const SECTIONS: Array<{ title: string; body: string }> = [
   },
   {
     title: 'Your controls',
-    body: 'Profile lets you export a copy of your data as JSON, reset preferences, or delete all data. Deleting data removes the local database, cancels scheduled reminders, and deletes your synced tasks, steps, history, check-ins, and profile preferences from Supabase. Your Supabase sign-in account itself is not deleted; sign out or contact support to remove the account.',
+    body: 'Profile lets you export a copy of your data as JSON, reset preferences, or delete all data. Deleting data clears the local database, cancels scheduled reminders, and removes your synced tasks, steps, and profile preferences from Supabase (along with any older history or check-in rows if present). Your Supabase sign-in account itself is not deleted; sign out or contact support to remove the account.',
   },
   {
     title: 'Analytics and ads',

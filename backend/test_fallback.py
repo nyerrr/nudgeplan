@@ -7,10 +7,17 @@ Usage:
     python test_fallback.py
 """
 
+import asyncio
+import os
 import sys
 from types import SimpleNamespace
 
-import main
+# Keep this offline test independent of any local Supabase configuration.
+os.environ["SUPABASE_URL"] = ""
+os.environ["SUPABASE_ANON_KEY"] = ""
+os.environ["AUTH_REQUIRED"] = "false"
+
+import main  # noqa: E402
 
 
 class FakeModels:
@@ -26,9 +33,19 @@ class FakeModels:
         return SimpleNamespace(text=outcome)
 
 
+class FakeAioModels:
+    def __init__(self, models: FakeModels):
+        self._models = models
+
+    async def generate_content(self, model, contents, config=None):
+        return self._models.generate_content(model, contents, config)
+
+
 class FakeClient:
-    def __init__(self, behaviour):
+    def __init__(self, behaviour, sync_only: bool = False):
         self.models = FakeModels(behaviour)
+        if not sync_only:
+            self.aio = SimpleNamespace(models=FakeAioModels(self.models))
 
 
 def main_check() -> int:
@@ -46,7 +63,7 @@ def main_check() -> int:
                 "backup-model": '{"tasks": ["A"], "breakdown": "ok"}',
             }
         )
-        text, used, errors = main._generate_with_fallback("prompt")
+        text, used, errors = asyncio.run(main._generate_with_fallback("prompt"))
         assert text is not None, "expected a successful response"
         assert used == "backup-model", f"expected backup-model, got {used}"
         assert main.client.models.calls == ["primary-model", "backup-model"], (
@@ -63,7 +80,7 @@ def main_check() -> int:
                 "last-resort": RuntimeError("crash"),
             }
         )
-        text, used, errors = main._generate_with_fallback("prompt")
+        text, used, errors = asyncio.run(main._generate_with_fallback("prompt"))
         assert text is None, "expected None when all models fail"
         assert used is None, "expected None model"
         assert len(errors) == 3, f"expected 3 errors, got {len(errors)}"
@@ -71,10 +88,18 @@ def main_check() -> int:
 
         # 3. Primary succeeds -> no fallback attempted
         main.client = FakeClient({"primary-model": '{"tasks": [], "breakdown": ""}'})
-        text, used, errors = main._generate_with_fallback("prompt")
+        text, used, errors = asyncio.run(main._generate_with_fallback("prompt"))
         assert used == "primary-model", f"expected primary-model, got {used}"
         assert main.client.models.calls == ["primary-model"], "fallback should not run"
         print("[OK] primary succeeded -> no fallback needed")
+
+        # 4. A client without an async surface still works off the event loop.
+        sync_fake = FakeClient({"primary-model": '{"tasks": [], "breakdown": ""}'}, sync_only=True)
+        main.client = sync_fake
+        text, used, errors = asyncio.run(main._generate_with_fallback("prompt"))
+        assert text is not None and used == "primary-model", "sync client fallback failed"
+        assert sync_fake.models.calls == ["primary-model"], "sync client call missing"
+        print("[OK] sync-only client still works via a worker thread")
 
         print("\n[OK] All fallback cases passed.")
         return 0

@@ -35,9 +35,20 @@ class FakeModels:
         return SimpleNamespace(text=self.payload)
 
 
+class FakeAioModels:
+    """Mirror the real client's async surface so routes stay non-blocking."""
+
+    def __init__(self, models: FakeModels):
+        self._models = models
+
+    async def generate_content(self, model, contents, config=None):
+        return self._models.generate_content(model, contents, config)
+
+
 class FakeClient:
     def __init__(self, payload: str):
         self.models = FakeModels(payload)
+        self.aio = SimpleNamespace(models=FakeAioModels(self.models))
 
 
 def call_api(
@@ -189,6 +200,15 @@ def test_guard_clamps_bad_values() -> None:
     print(f"[OK] guard clamped bad values: {task}")
 
 
+def test_non_finite_numbers_degrade() -> None:
+    expect(main._finite_float("Infinity") is None, "Infinity must be rejected")
+    expect(main._finite_float(float("nan")) is None, "NaN must be rejected")
+    expect(main._coerce_minutes(float("inf")) == 20, "infinite minutes must fall back")
+    parsed = main._parse_json('{"tasks": [], "breakdown": NaN}')
+    expect(parsed["breakdown"] is None, "NaN must not survive JSON parsing")
+    print("[OK] NaN and Infinity degrade safely")
+
+
 def test_minutes_rounded() -> None:
     payload = json.dumps({"tasks": [{"title": "Round me", "minutes": 23}]})
     res, _ = call_api(payload)
@@ -310,7 +330,6 @@ def test_checkin_contract() -> None:
         path="/plan/checkin",
         body={
             "text": "I'm tired but have a chemistry exam in 9 days at 6pm.",
-            "energy": "medium",
             "start_h": 9,
             "end_h": 18,
         },
@@ -334,6 +353,29 @@ def test_checkin_contract() -> None:
         "today/tomorrow scheduling should not become a deadline badge",
     )
     print("[OK] check-in contract: due date, fixed time, and task shape preserved")
+
+
+def test_explicit_energy_wins() -> None:
+    payload = json.dumps(
+        {"tasks": [{"title": "Draft the outline", "minutes": 20}], "breakdown": "ok"}
+    )
+    res, _ = call_api(
+        payload,
+        path="/plan/checkin",
+        body={"text": "I feel amazing", "energy": "low"},
+    )
+    expect(res.status_code == 200, f"check-in failed: {res.text}")
+    expect(
+        res.json()["energy"] == "low",
+        "an explicit energy selection must not be overwritten by keyword detection",
+    )
+    print("[OK] explicit energy selection wins over text detection")
+
+
+def test_blank_input_rejected() -> None:
+    res, _ = call_api("", path="/ai/plan", body={"text": "   "})
+    expect(res.status_code == 422, f"whitespace-only text should be rejected: {res.text}")
+    print("[OK] whitespace-only input rejected before the AI call")
 
 
 def test_steps_guard() -> None:
@@ -367,6 +409,29 @@ def test_steps_guard() -> None:
         "step timers must fit inside the task duration",
     )
     print(f"[OK] steps guard: {[step['text'] for step in steps]}")
+
+
+def test_checkin_rejects_vague_first_step() -> None:
+    payload = json.dumps(
+        {
+            "tasks": [
+                {
+                    "title": "Study for the chemistry exam",
+                    "minutes": 45,
+                    "steps": ["Work on it", "Open the notes at chapter 4"],
+                }
+            ],
+            "breakdown": "ok",
+        }
+    )
+    res, _ = call_api(payload, path="/plan/checkin", body={"text": "study chemistry"})
+    expect(res.status_code == 200, f"check-in failed: {res.text}")
+    first_step = res.json()["items"][0]["steps"][0]["text"].lower()
+    expect(
+        "work on" not in first_step and first_step != "focus",
+        f"vague first step survived check-in: {first_step}",
+    )
+    print(f"[OK] check-in replaced vague first step with '{first_step}'")
 
 
 def test_step_timers_fit_budget() -> None:
@@ -434,6 +499,7 @@ def main_check() -> int:
     test_markdown_fence()
     test_string_tasks_are_upgraded()
     test_guard_clamps_bad_values()
+    test_non_finite_numbers_degrade()
     test_minutes_rounded()
     test_prose_wrapped_json()
     test_malformed_output()
@@ -441,7 +507,10 @@ def main_check() -> int:
     test_prompt_includes_today()
     test_offline_planner()
     test_checkin_contract()
+    test_explicit_energy_wins()
+    test_blank_input_rejected()
     test_steps_guard()
+    test_checkin_rejects_vague_first_step()
     test_step_timers_fit_budget()
     test_offline_checkin_and_steps()
 

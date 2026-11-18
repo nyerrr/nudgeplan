@@ -2,7 +2,7 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface VoiceInputOptions {
   /** Full transcript for this dictation session, including interim text. */
@@ -35,7 +35,18 @@ export function useVoiceInput({
   onError,
 }: VoiceInputOptions & { onResult?: (transcript: string) => void }) {
   const [listening, setListening] = useState(false);
-  const [supported, setSupported] = useState(false);
+  const [supported, setSupported] = useState(() => speechRecognitionAvailable());
+
+  useEffect(
+    () => () => {
+      try {
+        ExpoSpeechRecognitionModule.stop();
+      } catch {
+        // Recognition may already have stopped with the screen.
+      }
+    },
+    [],
+  );
 
   const handleTranscript = useCallback(
     (transcript: string) => {

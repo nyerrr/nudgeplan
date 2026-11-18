@@ -126,12 +126,18 @@ export async function deleteAllTasksRemote(userId: string) {
 /** Remove every synced row for an account (the auth user itself is kept). */
 export async function deleteAllUserDataRemote(userId: string) {
   if (!supabase) return;
-  await supabase.from('steps').delete().eq('user_id', userId);
-  await supabase.from('tasks').delete().eq('user_id', userId);
-  await supabase.from('history').delete().eq('user_id', userId);
-  await supabase.from('daily_stats').delete().eq('user_id', userId);
-  await supabase.from('checkins').delete().eq('user_id', userId);
-  await supabase.from('profiles').delete().eq('id', userId);
+  const deletes = [
+    supabase.from('steps').delete().eq('user_id', userId),
+    supabase.from('tasks').delete().eq('user_id', userId),
+    supabase.from('history').delete().eq('user_id', userId),
+    supabase.from('daily_stats').delete().eq('user_id', userId),
+    supabase.from('checkins').delete().eq('user_id', userId),
+    supabase.from('profiles').delete().eq('id', userId),
+  ];
+  // Fail loudly so the queued reset can retry instead of reporting success.
+  for (const result of await Promise.all(deletes)) {
+    if (result.error) throw result.error;
+  }
 }
 
 type RemoteData = Awaited<ReturnType<typeof fetchRemoteState>>;

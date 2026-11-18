@@ -134,7 +134,7 @@ the `Confirm`, `Reality Check`, and task detail screens that open on top.
 | Android emulator | `npx expo start`, then press `a` | `http://10.0.2.2:8001` |
 | Physical Android phone | set `EXPO_PUBLIC_API_URL=http://<your-pc-lan-ip>:8001` in `frontend/.env`, then `npx expo start` | your PC's LAN IP |
 
-The web and emulator defaults live in `frontend/src/api/plan.ts`;
+The web and emulator defaults live in `frontend/src/lib/api.ts`;
 `EXPO_PUBLIC_API_URL` overrides them.
 
 ### 4. Test the API directly
@@ -151,7 +151,8 @@ Frontend checks:
 ```powershell
 cd frontend
 npm run typecheck
-npm run export:web
+npm test
+npx expo export --platform web
 ```
 
 ## API at a glance
@@ -205,10 +206,11 @@ Invoke-RestMethod http://localhost:8001/health
 
 ## Roadmap
 
-| Phase | Weeks | Focus                                        |
-| ----- | ----- | -------------------------------------------- |
-| 1     | 1-4   | Working prototype: brain dump, plan, check-in |
-| 2     | 5-8   | Reality Check Engine, Micro-Step Guard        |
-| 3     | 9-12  | Supabase auth, cloud sync, EAS build          |
+| Phase | Weeks | Focus                                        | Status   |
+| ----- | ----- | -------------------------------------------- | -------- |
+| 1     | 1-4   | Working prototype: brain dump, plan, check-in | Shipped  |
+| 2     | 5-8   | Reality Check Engine, Micro-Step Guard        | Shipped  |
+| 3     | 9-12  | Supabase auth, cloud sync, EAS build          | Shipped  |
+| 4     | Next  | Sync conflict resolution, OTA updates, store release | Planned |
 
 See `backend/README.md` and `frontend/README.md` for details.

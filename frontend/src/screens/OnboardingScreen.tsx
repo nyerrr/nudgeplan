@@ -76,8 +76,15 @@ export function OnboardingScreen() {
       return;
     }
     setWorking(true);
-    await completeOnboarding({ name, startH, endH, energy, nudges });
-    setWorking(false);
+    try {
+      await completeOnboarding({ name, startH, endH, energy, nudges });
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Could not save your setup.',
+      );
+    } finally {
+      setWorking(false);
+    }
   };
 
   return (
@@ -220,7 +227,7 @@ export function OnboardingScreen() {
             >
               {user?.provider === 'guest'
                 ? 'This stays on your device. You can add an account later from Profile.'
-                : "We'll use this for greetings. Your plan stays private on this device."}
+                : "We'll use this for greetings. Your plan is private to your account, with a local copy on this device."}
             </Text>
 
             <TextInput
