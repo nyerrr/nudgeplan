@@ -298,6 +298,20 @@ def test_offline_planner() -> None:
     print("[OK] offline planner: " + ", ".join(f"{t['title']} ({t['minutes']}m)" for t in tasks))
 
 
+def test_greeting_is_chat() -> None:
+    main.MOCK = True
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.app) as client:
+        res = client.post("/plan/checkin", json={"text": "hello"})
+
+    expect(res.status_code == 200, f"greeting: got {res.status_code} -> {res.text}")
+    body = res.json()
+    expect(body["items"] == [], f"greeting should not create tasks: {body}")
+    expect(bool(body["reply"].strip()), "greeting should still get a chat reply")
+    print("[OK] greeting returns chat, not a plan")
+
+
 def test_checkin_contract() -> None:
     due = (date.today() + timedelta(days=9)).isoformat()
     payload = json.dumps(
@@ -506,6 +520,7 @@ def main_check() -> int:
     test_past_due_date_dropped()
     test_prompt_includes_today()
     test_offline_planner()
+    test_greeting_is_chat()
     test_checkin_contract()
     test_explicit_energy_wins()
     test_blank_input_rejected()

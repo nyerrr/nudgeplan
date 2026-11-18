@@ -80,6 +80,10 @@ const STUCK_PHRASES =
   /\b(?:i'?m|i am|i keep|keep|i have been|i've been)?\s*(?:stuck on|stuck with|stuck|avoiding|putting off|procrastinating on|dreading|can'?t start|can'?t get started on)\b/gi;
 const TRAILING_PREP = /\b(for|at|by|on|due|in|about)\s*$/i;
 const EDGE_PUNCT = /^[\s,.:;-]+|[\s,.:;-]+$/g;
+// A greeting is chat, not a task. Only matches when the whole statement is
+// small talk, so "hello, call the dentist" still produces a task.
+const NON_ACTIONABLE =
+  /^\s*(?:hi|hello|hey|yo|sup|good\s+(?:morning|afternoon|evening)|thanks|thank\s+you|ok|okay|cool|nice|great|how\s+are\s+you(?:\s+doing)?|what'?s\s+up)(?:\s+there)?[\s!.,?]*$/i;
 
 const STEP_SETS: Array<{ re: RegExp; steps: Array<[string, number]> }> = [
   {
@@ -886,6 +890,10 @@ export function parseBrainDump(text: string): {
   let detectedEnergy: Energy | null = null;
   let carry: Day = 'today';
 
+  if (NON_ACTIONABLE.test(text.trim())) {
+    return { items, energy: null };
+  }
+
   const segments = text.split(
     /\n+|;|\.(?:\s+|$)|\s*,\s*|\s+(?:and then|then|also)\s+/i,
   );
@@ -893,6 +901,7 @@ export function parseBrainDump(text: string): {
   segments.forEach((raw) => {
     let seg = (raw ?? '').trim();
     if (!seg) return;
+    if (NON_ACTIONABLE.test(seg)) return;
 
     const prefix = seg.match(/^(tomorrow|today)\s*:\s*/i);
     if (prefix) {
@@ -1115,7 +1124,7 @@ export function applyCheckIn(
       from: 'bot',
       text:
         parsed.reply ||
-        'I did not find a task in that. Try: Write report 2h, call Sam at 4pm, gym tomorrow.',
+        'Hi! Tell me what you need to get done — even a messy list works. Try: Write report 2h, call Sam at 4pm, gym tomorrow.',
       cta: [
         { label: 'Check in again', act: 'checkin', ghost: true },
         { label: 'View plan', act: 'plan', ghost: true },

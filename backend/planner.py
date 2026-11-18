@@ -47,6 +47,19 @@ LOW_ENERGY = re.compile(
 URGENT = re.compile(r"\b(today|tonight|deadline|due|urgent|asap|before \d)\b", re.I)
 SOMEDAY = re.compile(r"\b(someday|maybe|eventually|at some point)\b", re.I)
 
+# Small talk is a chat turn, not a task. Match only when the whole statement is
+# a greeting/thanks, so "hello, call the dentist" still becomes a task.
+NON_ACTIONABLE = re.compile(
+    r"^\s*(?:hi|hello|hey|yo|sup|good\s+(?:morning|afternoon|evening)|"
+    r"thanks|thank\s+you|ok|okay|cool|nice|great|"
+    r"how\s+are\s+you(?:\s+doing)?|what'?s\s+up)(?:\s+there)?[\s!.,?]*$",
+    re.I,
+)
+EMPTY_REPLY = (
+    "Hi! Tell me what you need to get done — even a messy list works — "
+    "and I'll turn it into a plan."
+)
+
 DUE_RULES = [
     (re.compile(r"\b(today|tonight|this morning|this afternoon|this evening)\b", re.I), "today"),
     (re.compile(r"\btomorrow\b", re.I), "tomorrow"),
@@ -134,6 +147,8 @@ def split_statements(text: str) -> list[str]:
     statements = []
     for part in raw_parts:
         cleaned = FILLER.sub("", part).strip(" .!?;,")
+        if NON_ACTIONABLE.match(cleaned):
+            continue
         if len(cleaned) > 2:
             statements.append(cleaned)
     return statements
@@ -259,13 +274,14 @@ def make_steps(statement: str) -> list[str]:
 
 def breakdown(text: str) -> dict:
     """Build an offline plan from a brain dump, using the same task shape."""
+    text = re.sub(r"\s+", " ", text.strip())
+    if not text or NON_ACTIONABLE.match(text):
+        return {"tasks": [], "breakdown": EMPTY_REPLY}
+
     statements = split_statements(text)
 
     if not statements:
-        return {
-            "tasks": [],
-            "breakdown": "Nothing to plan yet. Add a few tasks to your brain dump.",
-        }
+        return {"tasks": [], "breakdown": EMPTY_REPLY}
 
     tasks = []
     for statement in statements:
@@ -284,8 +300,7 @@ def breakdown(text: str) -> dict:
 
     breakdown_text = (
         f"Offline mode: split your dump into {len(tasks)} startable task"
-        f"{'s' if len(tasks) != 1 else ''}. "
-        "Add a GEMINI_API_KEY to backend/.env to let Gemini do this."
+        f"{'s' if len(tasks) != 1 else ''}."
     )
 
     return {"tasks": tasks, "breakdown": breakdown_text}

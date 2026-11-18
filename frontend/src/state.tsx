@@ -1107,8 +1107,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               chat: [...latest.chat, userMessage].slice(-MAX_CHAT_MESSAGES),
             };
         if (parsed.items.length) {
-          if (base !== latest) setState(base);
-          const review = createTaskReview(parsed, text, latest.tasks);
+          const count = parsed.items.length;
+          const reply =
+            parsed.reply?.trim() ||
+            `I found ${count} task${count === 1 ? '' : 's'}. Review ${count === 1 ? 'it' : 'them'} before I add ${count === 1 ? 'it' : 'them'} to your plan.`;
+          const botMessage: ChatMessage = {
+            id: newId('m'),
+            from: 'bot',
+            text: reply,
+          };
+          commit({
+            ...base,
+            chat: [...base.chat, botMessage].slice(-MAX_CHAT_MESSAGES),
+          });
+          const review = createTaskReview(
+            { ...parsed, reply: '' },
+            text,
+            latest.tasks,
+          );
           pendingReviewRef.current = review;
           setPendingReview(review);
           setReviewError(null);

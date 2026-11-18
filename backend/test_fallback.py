@@ -41,6 +41,17 @@ class FakeAioModels:
         return self._models.generate_content(model, contents, config)
 
 
+class CaptureAioModels:
+    """Capture the request config so unit conversions can be asserted."""
+
+    def __init__(self):
+        self.config = None
+
+    async def generate_content(self, model, contents, config=None):
+        self.config = config
+        return SimpleNamespace(text="ok")
+
+
 class FakeClient:
     def __init__(self, behaviour, sync_only: bool = False):
         self.models = FakeModels(behaviour)
@@ -52,6 +63,7 @@ def main_check() -> int:
     original_client = main.client
     original_primary = main.MODEL_NAME
     original_fallbacks = main.MODEL_FALLBACKS
+    original_timeout = main.GEMINI_TIMEOUT_SECONDS
 
     try:
         # 1. Primary fails with 503, first fallback succeeds
@@ -101,12 +113,33 @@ def main_check() -> int:
         assert sync_fake.models.calls == ["primary-model"], "sync client call missing"
         print("[OK] sync-only client still works via a worker thread")
 
+        # 5. google-genai expects milliseconds. Passing seconds made every call
+        #    abort in ~30ms with ConnectTimeout, silently forcing offline mode.
+        capture = CaptureAioModels()
+        main.client = SimpleNamespace(aio=SimpleNamespace(models=capture))
+        main.GEMINI_TIMEOUT_SECONDS = 30
+        text = asyncio.run(
+            main._generate_once("prompt", main.PlanPayload, "test-model", timeout=30)
+        )
+        assert text == "ok", "capture client should return text"
+        timeout_ms = capture.config["http_options"].timeout
+        assert timeout_ms == 30_000, f"expected 30000 ms, got {timeout_ms}"
+        print("[OK] Gemini timeout converts seconds to milliseconds")
+
+        capture = CaptureAioModels()
+        main.client = SimpleNamespace(aio=SimpleNamespace(models=capture))
+        asyncio.run(main._generate_once("prompt", main.PlanPayload, "test-model"))
+        timeout_ms = capture.config["http_options"].timeout
+        assert timeout_ms == 30_000, f"expected global 30000 ms, got {timeout_ms}"
+        print("[OK] Gemini default timeout also uses milliseconds")
+
         print("\n[OK] All fallback cases passed.")
         return 0
     finally:
         main.client = original_client
         main.MODEL_NAME = original_primary
         main.MODEL_FALLBACKS = original_fallbacks
+        main.GEMINI_TIMEOUT_SECONDS = original_timeout
 
 
 if __name__ == "__main__":

@@ -697,8 +697,21 @@ async def plan_checkin(req: CheckInRequest):
     ``dueDate`` so a future exam or deadline is never silently dropped.
     """
     today, now_time = _client_now(req)
+    if NON_ACTIONABLE_RE.match(" ".join(req.text.split())):
+        return CheckInResponse(
+            items=[],
+            energy=req.energy or _detect_energy(req.text),
+            reply=CHAT_REPLY,
+            source="offline",
+            model=None,
+        )
     if MOCK or not HAS_REAL_KEY:
         tasks, breakdown = _normalise_plan(planner.breakdown(req.text), today)
+        if not MOCK:
+            breakdown = (
+                f"{breakdown} Add GEMINI_API_KEY to backend/.env to let Gemini "
+                "plan for you."
+            )
         return _checkin_response(req, tasks, breakdown, "offline", None, today)
 
     context = _checkin_context(req, now_time)
@@ -708,6 +721,7 @@ async def plan_checkin(req: CheckInRequest):
     if raw is None:
         logger.warning("All Gemini models failed for /plan/checkin: %s", "; ".join(errors))
         tasks, breakdown = _normalise_plan(planner.breakdown(req.text), today)
+        breakdown = f"{breakdown} Gemini was unreachable, so I used the offline planner."
         return _checkin_response(req, tasks, breakdown, "offline", None, today)
 
     tasks, breakdown = _normalise_plan(_parse_json(raw), today)
@@ -726,7 +740,9 @@ everything on their mind.
 Today is {weekday}, {today}. Resolve relative dates ("Friday", "next week") \
 against that date, and never return a date in the past.
 
-Turn the dump into 2 to {max_tasks} concrete tasks. Rules:
+Turn the dump into 0 to {max_tasks} concrete tasks. Return an empty "tasks" \
+list when the dump contains no actionable task; never invent tasks to satisfy a \
+count. Rules:
 
 - Each task is ONE specific action, not a project. "Draft the intro paragraph" \
 is a task; "write the paper" is not.
@@ -742,7 +758,10 @@ real deadline or consequence.
 - "steps" is 2 to 4 micro-steps. The FIRST step must be startable in under 10 \
 minutes and must not require making a decision.
 - Do not invent tasks the user did not mention. Do not merge unrelated things.
-- "breakdown" is 1 or 2 sentences explaining the plan.
+- "breakdown" is your chat reply. Be warm, direct, and specific in 1-3 \
+sentences. When there are no tasks, answer the user naturally instead of \
+describing a plan. When the request is ambiguous, ask one short clarifying \
+question.
 
 Return STRICT JSON and nothing else, matching exactly this shape:
 
@@ -764,7 +783,9 @@ return a date in the past.
 
 {context}
 
-Turn the dump into 2 to {max_tasks} concrete tasks. Rules:
+Turn the dump into 0 to {max_tasks} concrete tasks. Return an empty "tasks" \
+list when the dump contains no actionable task; never invent tasks to satisfy a \
+count. Rules:
 
 - Each task is ONE specific action, not a project. "Draft the intro paragraph" \
 is a task; "write the paper" is not.
@@ -791,8 +812,10 @@ final step must finish or consolidate the work, not just close an app.
 When you do not know the exact location, say "the assigned chapter", "the open \
 document", or "the relevant file".
 - Do not invent tasks the user did not mention. Do not merge unrelated things.
-- "breakdown" is 1 or 2 sentences explaining the plan. If there is a real \
-deadline, mention the date.
+- "breakdown" is your chat reply. Be warm, direct, and specific in 1-3 \
+sentences. When there are no tasks, answer the user naturally instead of \
+describing a plan. When the request is ambiguous, ask one short clarifying \
+question. If there is a real deadline, mention the date.
 
 Return STRICT JSON and nothing else, matching exactly this shape:
 
@@ -927,13 +950,13 @@ async def _generate_once(
     prompt: str, schema: type[BaseModel], model: str, timeout: float | None = None
 ) -> str:
     """Call one model without blocking the event loop."""
+    timeout_s = timeout if timeout is not None else GEMINI_TIMEOUT_SECONDS
     config = {
         "response_mime_type": "application/json",
         "response_schema": schema,
         "max_output_tokens": GEMINI_MAX_OUTPUT_TOKENS,
-        "http_options": genai_types.HttpOptions(
-            timeout=timeout if timeout is not None else GEMINI_TIMEOUT_SECONDS
-        ),
+        # google-genai's HttpOptions.timeout is in milliseconds, not seconds.
+        "http_options": genai_types.HttpOptions(timeout=int(timeout_s * 1000)),
     }
     aio_models = getattr(getattr(client, "aio", None), "models", None)
     if aio_models is not None:
@@ -1043,9 +1066,12 @@ def _normalise_plan(
             break
 
     breakdown = _clean_text(parsed.get("breakdown"), 400)
-    if not breakdown and tasks:
-        count = len(tasks)
-        breakdown = f"Split your dump into {count} startable task{'s' if count != 1 else ''}."
+    if not breakdown:
+        if tasks:
+            count = len(tasks)
+            breakdown = f"Split your dump into {count} startable task{'s' if count != 1 else ''}."
+        else:
+            breakdown = CHAT_REPLY
 
     return tasks, breakdown
 
@@ -1256,6 +1282,18 @@ def _detect_energy(text: str) -> Energy | None:
     if HIGH_ENERGY_RE.search(text):
         return "high"
     return None
+
+
+NON_ACTIONABLE_RE = re.compile(
+    r"^\s*(?:hi|hello|hey|yo|sup|good\s+(?:morning|afternoon|evening)|"
+    r"thanks|thank\s+you|ok|okay|cool|nice|great|"
+    r"how\s+are\s+you(?:\s+doing)?|what'?s\s+up)(?:\s+there)?[\s!.,?]*$",
+    re.I,
+)
+CHAT_REPLY = (
+    "Hi! Tell me what you need to get done — even a messy list works — "
+    "and I'll turn it into a plan."
+)
 
 
 def _clamp_step_minutes(value: object, default: int = 5) -> int:

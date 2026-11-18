@@ -54,6 +54,13 @@ describe('engine helpers', () => {
     });
   });
 
+  it('treats a greeting as chat, not a task', () => {
+    expect(parseBrainDump('hello').items).toHaveLength(0);
+    const mixed = parseBrainDump('hello, I need to call the dentist');
+    expect(mixed.items).toHaveLength(1);
+    expect(mixed.items[0].title).toBe('Call the dentist');
+  });
+
   it('adds micro-steps for tasks the user says they are stuck on', () => {
     const result = parseBrainDump("I'm stuck on the budget");
 
