@@ -303,23 +303,30 @@ CLARIFY_AMBIGUOUS_RE = re.compile(
 )
 
 MOVE_RE = re.compile(
-    r"^\s*move (?:the )?(.+?) to (tomorrow|today|\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*$",
+    r"^\s*(?:please\s+|can you\s+|could you\s+)?(?:move|reschedule|push) (?:the )?(.+?) (?:to|for) (tomorrow|today|\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*[.!?]*$",
     re.I,
 )
 COMPLETE_RE = re.compile(
-    r"^\s*(?:complete|mark done|finish|done with) (?:the )?(.+?)\s*$",
+    r"^\s*(?:please\s+|can you\s+|could you\s+)?(?:"
+    r"mark\s+(?:the\s+)?(.+?)\s+(?:as\s+)?done"
+    r"|(?:complete|finish|done with|mark\s+done|i(?:'ve| have)?\s+(?:done|finished|completed))\s+(?:the\s+)?(.+?)"
+    r")\s*[.!?]*$",
     re.I,
 )
 DELETE_RE = re.compile(
-    r"^\s*(?:delete|remove|cancel) (?:the )?(.+?)\s*$",
+    r"^\s*(?:please\s+|can you\s+|could you\s+)?(?:delete|remove|cancel|drop) (?:the )?(.+?)\s*[.!?]*$",
     re.I,
 )
 RESIZE_RE = re.compile(
-    r"^\s*(?:resize|make) (?:the )?(.+?) (?:to |for )?(\d+)\s*(?:m|mins|minutes)?\s*$",
+    r"^\s*(?:please\s+|can you\s+|could you\s+)?(?:resize|make|change|shorten|extend) (?:the )?(.+?) (?:to |for |by )?(\d+)\s*(?:m|mins|minutes)?\s*[.!?]*$",
     re.I,
 )
 MERGE_RE = re.compile(
-    r"^\s*merge (?:the )?(.+?) (?:and|with) (?:the )?(.+?)\s*$",
+    r"^\s*(?:please\s+|can you\s+|could you\s+)?merge (?:the )?(.+?) (?:and|with|into) (?:the )?(.+?)\s*[.!?]*$",
+    re.I,
+)
+QUERY_NEXT_RE = re.compile(
+    r"\b(what should i do (?:first|next)|what('?s| is) next|where (?:do|should) i start|what do i start with|prioritize my day|what first)\b",
     re.I,
 )
 ORDINAL_MAP = {
@@ -330,7 +337,9 @@ ORDINAL_MAP = {
     "third": 2,
     "3rd": 2,
     "fourth": 3,
-    "4th": 3,
+    "4th": 4 - 1,
+    "fifth": 4,
+    "5th": 4,
 }
 
 
@@ -360,6 +369,20 @@ def detect_kind(statement: str) -> str:
 
 
 def _find_matching_task(query: str, existing: list[dict]) -> dict | None:
+    if not existing:
+        return None
+    q = (query or "").strip().lower()
+    # Ordinal reference to existing tasks (e.g. "the first task", "second one")
+    for word, idx in ORDINAL_MAP.items():
+        if re.search(rf"\b{re.escape(word)}\b(?:\s+(?:task|one|item))?\b", q):
+            active = [t for t in existing if not t.get("done")]
+            pool = active if active else existing
+            if 0 <= idx < len(pool):
+                return pool[idx]
+    if q in {"it", "that", "that one", "this", "this one", "the task"}:
+        active = [t for t in existing if not t.get("done")]
+        pool = active if active else existing
+        return pool[0] if pool else None
     best_match = None
     best_score = 0.0
     for task in existing:
@@ -369,6 +392,26 @@ def _find_matching_task(query: str, existing: list[dict]) -> dict | None:
             best_score = score
             best_match = task
     return best_match if best_score >= 0.55 else None
+
+
+def _recommend_next(existing: list[dict], context: dict) -> str:
+    active = [t for t in existing if not t.get("done") and t.get("day") == "today"]
+    if not active:
+        active = [t for t in existing if not t.get("done")]
+    if not active:
+        return "You don't have any active tasks right now. Want to add what you need to get done?"
+    energy = context.get("energy")
+    def score(t: dict):
+        pri = int(t.get("pri", 2) or 2)
+        dur = int(t.get("dur", 30) or 30)
+        start = t.get("start")
+        fixed = 0 if t.get("fixed") or start is not None else 1
+        # Prefer fixed/soon, then priority; if low energy prefer shorter tasks
+        energy_bias = dur if energy == "low" else -dur
+        return (fixed, -pri, energy_bias, dur)
+    pick = sorted(active, key=score)[0]
+    reason = "it fits your current energy" if energy == "low" else "it's a good next step"
+    return f'Start with "{pick.get("title", "your next task")}" — {reason}. If that feels heavy, tell me and I can break it down.'
 
 
 def breakdown(text: str, context: dict | None = None) -> dict:
@@ -447,7 +490,7 @@ def breakdown(text: str, context: dict | None = None) -> dict:
     # 3b. Complete action
     m_comp = COMPLETE_RE.match(text_clean)
     if m_comp:
-        target_name = m_comp.group(1).strip()
+        target_name = (m_comp.group(1) or m_comp.group(2) or "").strip()
         matched = _find_matching_task(target_name, existing_tasks)
         if matched and matched.get("id"):
             return {
@@ -526,6 +569,15 @@ def breakdown(text: str, context: dict | None = None) -> dict:
                 ],
                 "breakdown": f"Merged '{match1.get('title')}' and '{match2.get('title')}'.",
             }
+
+    # 3f. Plan/query questions (no plan changes)
+    if QUERY_NEXT_RE.search(text_clean):
+        return {
+            "intent": "chat",
+            "tasks": [],
+            "actions": [],
+            "breakdown": _recommend_next(existing_tasks, context),
+        }
 
     # 4. Clarify check for ambiguous requests
     if CLARIFY_AMBIGUOUS_RE.match(text_clean):

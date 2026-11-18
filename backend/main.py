@@ -941,7 +941,8 @@ Determine your "intent":
 Rules:
 - Actions: when the user asks to move, complete, delete, resize, or merge an existing task, generate entries in "actions" referencing the task's ID from Existing tasks. Set "intent" to "act".
 - If the user is revising pending review proposals ("make the second one shorter"), adjust the proposed tasks accordingly and set intent "plan".
-- Do not duplicate tasks already present in Existing tasks. If a task already exists, update it via actions or ask to merge.
+- Questions about the plan (e.g. "what should I do first/next?", "will this fit?"): answer using Existing tasks, schedule gaps, priorities, and energy in "breakdown". Set "intent" to "chat" and do not create tasks or actions unless the user asks to change something.
+- Do not duplicate tasks already present in Existing tasks. If a requested task is very similar to an existing one, set "intent" to "clarify" and ask whether to merge/update it or add it separately (include clarify_state). If they clearly asked to merge or replace, emit an action instead.
 - Kind: set "kind" to "task" (normal action), "event" (calendar block/appointment/class), or "reminder".
 - "minutes" is a realistic focused-work estimate between {min_minutes} and {max_minutes}.
 - "steps": 3 to 5 micro-steps. The FIRST step must take 5 minutes or less and be a physical action with no decision needed.
