@@ -2,10 +2,10 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface VoiceInputOptions {
-  /** Full transcript for this dictation session, including interim text. */
+  /** Final transcript for a dictation session. */
   onTranscript: (transcript: string) => void;
   onError?: (message: string) => void;
 }
@@ -36,6 +36,7 @@ export function useVoiceInput({
 }: VoiceInputOptions & { onResult?: (transcript: string) => void }) {
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(() => speechRecognitionAvailable());
+  const lastFinalRef = useRef('');
 
   useEffect(
     () => () => {
@@ -56,12 +57,28 @@ export function useVoiceInput({
     [onResult, onTranscript],
   );
 
-  useSpeechRecognitionEvent('start', () => setListening(true));
+  useSpeechRecognitionEvent('start', () => {
+    lastFinalRef.current = '';
+    setListening(true);
+  });
   useSpeechRecognitionEvent('end', () => setListening(false));
 
   useSpeechRecognitionEvent('result', (event) => {
-    const transcript = event.results?.[0]?.transcript ?? '';
-    if (transcript.trim()) handleTranscript(transcript.trim());
+    const results = (event as { results?: Array<{ transcript?: string; isFinal?: boolean }>; isFinal?: boolean }).results ?? [];
+    const transcript = results
+      .map((result) => result?.transcript ?? '')
+      .join(' ')
+      .trim()
+      .replace(/\s+/g, ' ');
+    if (!transcript) return;
+
+    const isFinal =
+      (event as { isFinal?: boolean }).isFinal ?? results.every((result) => result?.isFinal === true);
+    if (!isFinal) return;
+
+    if (transcript === lastFinalRef.current) return;
+    lastFinalRef.current = transcript;
+    handleTranscript(transcript);
   });
 
   useSpeechRecognitionEvent('error', (event) => {
@@ -75,6 +92,7 @@ export function useVoiceInput({
 
   const start = useCallback(async () => {
     try {
+      lastFinalRef.current = '';
       const available = ExpoSpeechRecognitionModule.isRecognitionAvailable();
       setSupported(available);
       if (!available) {
@@ -93,7 +111,7 @@ export function useVoiceInput({
       }
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
-        interimResults: true,
+        interimResults: false,
         continuous: false,
         requiresOnDeviceRecognition: false,
       });

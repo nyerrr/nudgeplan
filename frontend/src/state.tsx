@@ -123,6 +123,9 @@ interface AppContextValue {
   deleteTask: (id: string) => void;
   addStep: (taskId: string, text: string) => void;
   toggleStep: (taskId: string, stepId: string) => void;
+  updateTaskStep: (taskId: string, stepId: string, patch: { text?: string; min?: number }) => void;
+  removeTaskStep: (taskId: string, stepId: string) => void;
+  moveTaskStep: (taskId: string, stepId: string, direction: 'up' | 'down') => void;
   makeSmaller: (taskId: string) => void;
   breakIntoSteps: (taskId: string) => Promise<number>;
   moveSuggested: () => void;
@@ -897,6 +900,95 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [commit, notify, updateTimer],
   );
 
+  const updateTaskStep = useCallback(
+    (taskId: string, stepId: string, patch: { text?: string; min?: number }) => {
+      const current = stateRef.current;
+      const task = current.tasks.find((item) => item.id === taskId);
+      if (!task) return;
+      let changed = false;
+      const steps = task.steps.map((step) => {
+        if (step.id !== stepId) return step;
+        const next = { ...step };
+        if (patch.text != null) {
+          const clean = patch.text.trim().slice(0, 120);
+          if (clean && clean !== step.text) {
+            next.text = clean;
+            changed = true;
+          }
+        }
+        if (patch.min != null) {
+          const min = Math.max(1, Math.min(120, Math.round(patch.min)));
+          if (min !== step.min) {
+            next.min = min;
+            changed = true;
+          }
+        }
+        return next;
+      });
+      if (!changed) return;
+      commit({
+        ...current,
+        tasks: current.tasks.map((item) =>
+          item.id === taskId ? { ...item, steps } : item,
+        ),
+        focusId: taskId,
+      });
+      if (timerRef.current.stepId === stepId) {
+        void cancelTimerNotification();
+        updateTimer(EMPTY_TIMER);
+      }
+    },
+    [commit, updateTimer],
+  );
+
+  const removeTaskStep = useCallback(
+    (taskId: string, stepId: string) => {
+      const current = stateRef.current;
+      const task = current.tasks.find((item) => item.id === taskId);
+      if (!task) return;
+      const steps = task.steps.filter((step) => step.id !== stepId);
+      if (steps.length === task.steps.length) return;
+      commit({
+        ...current,
+        tasks: current.tasks.map((item) =>
+          item.id === taskId ? { ...item, steps } : item,
+        ),
+        focusId: taskId,
+      });
+      if (timerRef.current.stepId === stepId) {
+        void cancelTimerNotification();
+        updateTimer(EMPTY_TIMER);
+      }
+      notify('Step removed.');
+    },
+    [commit, notify, updateTimer],
+  );
+
+  const moveTaskStep = useCallback(
+    (taskId: string, stepId: string, direction: 'up' | 'down') => {
+      const current = stateRef.current;
+      const task = current.tasks.find((item) => item.id === taskId);
+      if (!task) return;
+      const index = task.steps.findIndex((step) => step.id === stepId);
+      if (index < 0) return;
+      const nextIndex = direction === 'up' ? index - 1 : index + 1;
+      if (nextIndex < 0 || nextIndex >= task.steps.length) return;
+      const steps = [...task.steps];
+      const [moved] = steps.splice(index, 1);
+      steps.splice(nextIndex, 0, moved);
+      commit({
+        ...current,
+        tasks: current.tasks.map((item) =>
+          item.id === taskId ? { ...item, steps } : item,
+        ),
+        focusId: taskId,
+      });
+      void cancelTimerNotification();
+      updateTimer(EMPTY_TIMER);
+    },
+    [commit, updateTimer],
+  );
+
   const makeSmaller = useCallback(
     (taskId: string) => {
       const current = stateRef.current;
@@ -1580,6 +1672,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       deleteTask,
       addStep,
       toggleStep,
+      updateTaskStep,
+      removeTaskStep,
+      moveTaskStep,
       makeSmaller,
       breakIntoSteps,
       moveSuggested,
@@ -1640,6 +1735,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       deleteTask,
       addStep,
       toggleStep,
+      updateTaskStep,
+      removeTaskStep,
+      moveTaskStep,
       makeSmaller,
       breakIntoSteps,
       moveSuggested,

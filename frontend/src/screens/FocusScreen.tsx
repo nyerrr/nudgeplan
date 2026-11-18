@@ -31,6 +31,9 @@ export function FocusScreen() {
     timerSkip,
     syncTimer,
     toggleStep,
+    updateTaskStep,
+    removeTaskStep,
+    moveTaskStep,
     makeSmaller,
     addStep,
     breakIntoSteps,
@@ -41,6 +44,9 @@ export function FocusScreen() {
   const [stepText, setStepText] = useState('');
   const [breaking, setBreaking] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [editingStepId, setEditingStepId] = useState<string | null>(null);
+  const [editingStepText, setEditingStepText] = useState('');
+  const [editingStepMin, setEditingStepMin] = useState('10');
   const [deleteCandidate, setDeleteCandidate] = useState<{
     id: string;
     title: string;
@@ -71,6 +77,12 @@ export function FocusScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id, currentStep?.id]);
 
+  useEffect(() => {
+    setEditingStepId(null);
+    setEditingStepText('');
+    setEditingStepMin('10');
+  }, [selected?.id]);
+
   const breakdown = async () => {
     if (!selected) return;
     setBreaking(true);
@@ -88,6 +100,35 @@ export function FocusScreen() {
     if (!selected || !stepText.trim()) return;
     addStep(selected.id, stepText);
     setStepText('');
+  };
+
+  const startEditStep = (step: { id: string; text: string; min: number }) => {
+    setEditingStepId(step.id);
+    setEditingStepText(step.text);
+    setEditingStepMin(String(step.min));
+  };
+
+  const saveEditStep = () => {
+    if (!selected || !editingStepId) return;
+    const text = editingStepText.trim();
+    const min = Number(editingStepMin);
+    if (!text) {
+      notify('Step needs a name.');
+      return;
+    }
+    updateTaskStep(selected.id, editingStepId, {
+      text,
+      min: Number.isFinite(min) ? Math.max(1, Math.min(120, Math.round(min))) : undefined,
+    });
+    setEditingStepId(null);
+    setEditingStepText('');
+    setEditingStepMin('10');
+  };
+
+  const cancelEditStep = () => {
+    setEditingStepId(null);
+    setEditingStepText('');
+    setEditingStepMin('10');
   };
 
   const confirmDelete = (taskId: string, title: string) => {
@@ -490,8 +531,51 @@ export function FocusScreen() {
                 All steps
               </Label>
               <View style={styles.steps}>
-                {selected.steps.map((step) => {
+                {selected.steps.map((step, index) => {
                   const current = currentStep?.id === step.id;
+                  const editing = editingStepId === step.id;
+                  if (editing) {
+                    return (
+                      <View
+                        key={step.id}
+                        style={[
+                          styles.stepEditCard,
+                          {
+                            backgroundColor: colors.surface,
+                            borderColor: colors.brand,
+                          },
+                        ]}
+                      >
+                        <TextInput
+                          value={editingStepText}
+                          onChangeText={setEditingStepText}
+                          placeholder="Step"
+                          placeholderTextColor={colors.muted}
+                          style={[
+                            styles.stepEditInput,
+                            { color: colors.ink, borderColor: colors.line, backgroundColor: colors.bg },
+                          ]}
+                        />
+                        <View style={styles.stepEditRow}>
+                          <TextInput
+                            value={editingStepMin}
+                            onChangeText={setEditingStepMin}
+                            keyboardType="number-pad"
+                            placeholder="Min"
+                            placeholderTextColor={colors.muted}
+                            style={[
+                              styles.stepEditMin,
+                              { color: colors.ink, borderColor: colors.line, backgroundColor: colors.bg },
+                            ]}
+                          />
+                          <Text style={{ color: colors.muted, fontFamily: fonts.medium, fontSize: 12 }}>min</Text>
+                          <View style={{ flex: 1 }} />
+                          <Button small ghost label="Cancel" onPress={cancelEditStep} />
+                          <Button small label="Save" onPress={saveEditStep} />
+                        </View>
+                      </View>
+                    );
+                  }
                   return (
                     <View
                       key={step.id}
@@ -532,28 +616,61 @@ export function FocusScreen() {
                           />
                         </View>
                       </Pressable>
-                      <Text
-                        style={{
-                          flex: 1,
-                          color: step.done ? colors.muted : colors.ink,
-                          fontFamily: fonts.regular,
-                          fontSize: 13.5,
-                          textDecorationLine: step.done
-                            ? 'line-through'
-                            : 'none',
-                        }}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Edit step: ${step.text}`}
+                        onPress={() => startEditStep(step)}
+                        style={styles.stepBody}
                       >
-                        {step.text}
-                      </Text>
-                      <Text
-                        style={{
-                          color: colors.muted,
-                          fontFamily: fonts.regular,
-                          fontSize: 12,
-                        }}
-                      >
-                        {step.min}m
-                      </Text>
+                        <Text
+                          style={{
+                            color: step.done ? colors.muted : colors.ink,
+                            fontFamily: fonts.regular,
+                            fontSize: 13.5,
+                            textDecorationLine: step.done ? 'line-through' : 'none',
+                          }}
+                        >
+                          {step.text}
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.muted,
+                            fontFamily: fonts.regular,
+                            fontSize: 12,
+                            marginTop: 1,
+                          }}
+                        >
+                          {step.min}m · tap to edit
+                        </Text>
+                      </Pressable>
+                      <View style={styles.stepActions}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Move step up: ${step.text}`}
+                          disabled={index === 0}
+                          onPress={() => moveTaskStep(selected.id, step.id, 'up')}
+                          style={({ pressed }) => [styles.iconBtn, { opacity: index === 0 ? 0.35 : pressed ? 0.7 : 1 }]}
+                        >
+                          <Icon name="chevron-up" size={16} color={colors.muted} />
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Move step down: ${step.text}`}
+                          disabled={index === selected.steps.length - 1}
+                          onPress={() => moveTaskStep(selected.id, step.id, 'down')}
+                          style={({ pressed }) => [styles.iconBtn, { opacity: index === selected.steps.length - 1 ? 0.35 : pressed ? 0.7 : 1 }]}
+                        >
+                          <Icon name="chevron-down" size={16} color={colors.muted} />
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Delete step: ${step.text}`}
+                          onPress={() => removeTaskStep(selected.id, step.id)}
+                          style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.7 : 1 }]}
+                        >
+                          <Icon name="trash-outline" size={16} color={colors.warn} />
+                        </Pressable>
+                      </View>
                     </View>
                   );
                 })}
@@ -707,17 +824,14 @@ const styles = StyleSheet.create({
   step: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     borderRadius: 14,
     paddingVertical: 9,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
   },
   checkHit: {
-    width: 44,
-    height: 44,
-    marginVertical: -10,
-    marginLeft: -10,
-    marginRight: -10,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -728,6 +842,52 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  stepBody: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 2,
+  },
+  stepActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  iconBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  stepEditCard: {
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 10,
+    gap: 8,
+  },
+  stepEditInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontFamily: fonts.regular,
+    fontSize: 13.5,
+  },
+  stepEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stepEditMin: {
+    width: 56,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    textAlign: 'center',
+    fontFamily: fonts.medium,
+    fontSize: 13,
   },
   addRow: {
     flexDirection: 'row',
