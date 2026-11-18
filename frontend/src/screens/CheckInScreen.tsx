@@ -113,6 +113,10 @@ export function CheckInScreen() {
     else if (cta.act === 'plan') go('plan');
     else if (cta.act === 'checkin') go('checkin');
     else if (cta.act === 'moveN') moveN(Number(cta.arg) || 1);
+    else if (cta.act === 'prompt') {
+      const value = cta.arg || cta.label;
+      void sendCheckIn(value);
+    }
   };
 
   const renderMessage = (message: ChatMessage) => {

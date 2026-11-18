@@ -1188,16 +1188,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         // 1. Clarify flow
         if (parsed.intent === 'clarify') {
-          clarifyStateRef.current = parsed.clarify_state ?? {
+          const cState = parsed.clarify_state ?? {
             original_request: text,
             question: parsed.reply,
           };
+          clarifyStateRef.current = cState;
+          const isDuplicateResolution = Boolean(
+            cState && typeof cState === 'object' && 'matched_task_id' in cState && 'draft_task' in cState,
+          );
           const botMessage: ChatMessage = {
             id: newId('m'),
             from: 'bot',
             text: parsed.reply,
             intent: 'clarify',
             source: parsed.source,
+            cta: isDuplicateResolution
+              ? [
+                  { label: 'Merge/update existing', act: 'prompt', arg: 'Merge/update existing task' },
+                  { label: 'Add separately', act: 'prompt', arg: 'Add separately', ghost: true },
+                ]
+              : undefined,
           };
           commit({
             ...base,

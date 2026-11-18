@@ -124,7 +124,7 @@ export interface StepsApiResponse {
 
 export interface ChatCta {
   label: string;
-  act: 'focus' | 'plan' | 'moveN' | 'checkin';
+  act: 'focus' | 'plan' | 'moveN' | 'checkin' | 'prompt';
   arg?: string;
   ghost?: boolean;
 }
