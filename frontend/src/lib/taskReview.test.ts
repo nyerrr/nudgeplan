@@ -89,4 +89,24 @@ describe('task review', () => {
       'No tasks were added. Your plan is unchanged.',
     );
   });
+
+  it('flags fuzzy duplicate tasks in the plan', () => {
+    const existing = [
+      {
+        id: 't1',
+        title: 'Write quarterly report',
+        dur: 60,
+        effort: 'high' as const,
+        day: 'today' as const,
+        pri: 2 as const,
+        start: null,
+        fixed: false,
+        done: false,
+        steps: [],
+        dueDate: null,
+      },
+    ];
+    const review = createTaskReview(parsed, 'Write report 45m', existing);
+    expect(review.proposals[0].warnings.some((w) => w.includes('Similar to'))).toBe(true);
+  });
 });

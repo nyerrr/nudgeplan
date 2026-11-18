@@ -10,6 +10,34 @@ import { clockFromMinutes, newId, parseClock, validIsoDate } from './engine';
 
 const EXPLICIT_DURATION = /\b\d+(?:\.\d+)?\s*(?:hours?|hrs?|h|minutes?|mins?|m)\b/i;
 
+const STOP_WORDS = new Set(['the', 'a', 'an', 'to', 'for', 'of', 'and', 'in', 'on', 'at']);
+
+function cleanTokens(s: string): Set<string> {
+  return new Set(
+    s
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 1 && !STOP_WORDS.has(w)),
+  );
+}
+
+function fuzzyMatch(a: string, b: string): boolean {
+  const normA = a.toLowerCase().trim();
+  const normB = b.toLowerCase().trim();
+  if (!normA || !normB) return false;
+  if (normA === normB || normA.includes(normB) || normB.includes(normA)) return true;
+  const tokensA = cleanTokens(normA);
+  const tokensB = cleanTokens(normB);
+  if (!tokensA.size || !tokensB.size) return false;
+  let common = 0;
+  for (const t of tokensA) {
+    if (tokensB.has(t)) common++;
+  }
+  const minSize = Math.min(tokensA.size, tokensB.size);
+  const maxSize = Math.max(tokensA.size, tokensB.size);
+  return common / maxSize >= 0.5 || (common === minSize && minSize >= 1);
+}
+
 function warningsFor(
   item: ParsedTask,
   rawText: string,
@@ -21,15 +49,13 @@ function warningsFor(
   if (item.dur === 45 && !EXPLICIT_DURATION.test(rawText)) {
     warnings.push('No duration was stated; check this estimate.');
   }
-  if (
-    existingTasks.some(
-      (task) => task.title.trim().toLowerCase() === item.title.trim().toLowerCase(),
-    ) ||
-    earlierItems.some(
-      (earlier) => earlier.title.trim().toLowerCase() === item.title.trim().toLowerCase(),
-    )
-  ) {
-    warnings.push('A task with this name is already in your plan.');
+
+  const existingMatch = existingTasks.find((task) => fuzzyMatch(task.title, item.title));
+  const earlierMatch = earlierItems.find((earlier) => fuzzyMatch(earlier.title, item.title));
+  if (existingMatch) {
+    warnings.push(`Similar to "${existingMatch.title}" in your plan. Merge or keep both?`);
+  } else if (earlierMatch) {
+    warnings.push('A similar task is in this same check-in.');
   }
   return warnings;
 }
@@ -52,6 +78,8 @@ export function createTaskReview(
       dueText: item.dueDate ?? '',
       warnings: warningsFor(item, rawText, existingTasks, parsed.items.slice(0, index)),
       source: item,
+      kind: item.kind ?? 'task',
+      rationale: item.rationale ?? null,
     })),
   };
 }
@@ -95,6 +123,8 @@ export function approvedCheckIn(
         start,
         fixed: start != null,
         dueDate,
+        kind: proposal.kind ?? 'task',
+        rationale: proposal.rationale ?? null,
       };
     }),
   };

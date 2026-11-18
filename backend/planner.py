@@ -8,6 +8,7 @@ Every task it produces still goes through the same Micro-Step Guard in
 ``main.py``, so the two paths cannot drift apart.
 """
 
+import difflib
 import re
 from datetime import date, timedelta
 
@@ -174,7 +175,23 @@ def task_title(statement: str) -> str:
     return statement[:1].upper() + statement[1:]
 
 
+EXPLICIT_HOURS_RE = re.compile(r"\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b", re.I)
+EXPLICIT_MINS_RE = re.compile(r"\b(\d+)\s*(?:minutes?|mins?|m)\b", re.I)
+
+
 def estimate_minutes(statement: str) -> int:
+    h_match = EXPLICIT_HOURS_RE.search(statement)
+    if h_match:
+        try:
+            return max(5, min(480, int(round(float(h_match.group(1)) * 60))))
+        except ValueError:
+            pass
+    m_match = EXPLICIT_MINS_RE.search(statement)
+    if m_match:
+        try:
+            return max(5, min(480, int(m_match.group(1))))
+        except ValueError:
+            pass
     for pattern, minutes in MINUTES_RULES:
         if pattern.search(statement):
             return minutes
@@ -272,28 +289,298 @@ def make_steps(statement: str) -> list[str]:
     ]
 
 
-def breakdown(text: str) -> dict:
-    """Build an offline plan from a brain dump, using the same task shape."""
-    text = re.sub(r"\s+", " ", text.strip())
-    if not text or NON_ACTIONABLE.match(text):
-        return {"tasks": [], "breakdown": EMPTY_REPLY}
+EVENT_RE = re.compile(
+    r"\b(dentist|doctor|meeting|flight|class|appointment|interview|exam at \d|call at \d|meet at \d)\b",
+    re.I,
+)
+REMINDER_RE = re.compile(
+    r"\b(remind|remember to|pay bill|take pill|take med|medication|renew)\b",
+    re.I,
+)
+CLARIFY_AMBIGUOUS_RE = re.compile(
+    r"^\s*(?:i have (?:an?|my) (?:exam|test|appointment|interview|flight)|doctor(?:'s)? appointment|dentist(?:'s)? appointment)\s*[\.!?]*$",
+    re.I,
+)
 
-    statements = split_statements(text)
+MOVE_RE = re.compile(
+    r"^\s*move (?:the )?(.+?) to (tomorrow|today|\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*$",
+    re.I,
+)
+COMPLETE_RE = re.compile(
+    r"^\s*(?:complete|mark done|finish|done with) (?:the )?(.+?)\s*$",
+    re.I,
+)
+DELETE_RE = re.compile(
+    r"^\s*(?:delete|remove|cancel) (?:the )?(.+?)\s*$",
+    re.I,
+)
+RESIZE_RE = re.compile(
+    r"^\s*(?:resize|make) (?:the )?(.+?) (?:to |for )?(\d+)\s*(?:m|mins|minutes)?\s*$",
+    re.I,
+)
+MERGE_RE = re.compile(
+    r"^\s*merge (?:the )?(.+?) (?:and|with) (?:the )?(.+?)\s*$",
+    re.I,
+)
+ORDINAL_MAP = {
+    "first": 0,
+    "1st": 0,
+    "second": 1,
+    "2nd": 1,
+    "third": 2,
+    "3rd": 2,
+    "fourth": 3,
+    "4th": 3,
+}
 
+
+def fuzzy_similarity(s1: str, s2: str) -> float:
+    w1 = " ".join(s1.lower().split())
+    w2 = " ".join(s2.lower().split())
+    if not w1 or not w2:
+        return 0.0
+    if w1 == w2:
+        return 1.0
+    tokens1 = set(w1.split())
+    tokens2 = set(w2.split())
+    overlap = len(tokens1 & tokens2) / max(len(tokens1 | tokens2), 1)
+    seq = difflib.SequenceMatcher(None, w1, w2).ratio()
+    containment = 0.0
+    if tokens1.issubset(tokens2) or tokens2.issubset(tokens1) or w1 in w2 or w2 in w1:
+        containment = 0.85
+    return max(overlap, seq, containment)
+
+
+def detect_kind(statement: str) -> str:
+    if EVENT_RE.search(statement):
+        return "event"
+    if REMINDER_RE.search(statement):
+        return "reminder"
+    return "task"
+
+
+def _find_matching_task(query: str, existing: list[dict]) -> dict | None:
+    best_match = None
+    best_score = 0.0
+    for task in existing:
+        title = task.get("title", "")
+        score = fuzzy_similarity(query, title)
+        if score > best_score:
+            best_score = score
+            best_match = task
+    return best_match if best_score >= 0.55 else None
+
+
+def breakdown(text: str, context: dict | None = None) -> dict:
+    """Build an offline plan or action response from a user turn."""
+    context = context or {}
+    text_clean = re.sub(r"\s+", " ", text.strip())
+    if not text_clean or NON_ACTIONABLE.match(text_clean):
+        return {"intent": "chat", "tasks": [], "actions": [], "breakdown": EMPTY_REPLY}
+
+    existing_tasks = context.get("tasks", [])
+    pending_proposals = context.get("pending_proposals", [])
+    clarify_state = context.get("clarify_state")
+
+    # 1. Check if this completes a previous clarify flow
+    if clarify_state and clarify_state.get("original_request"):
+        orig = clarify_state["original_request"]
+        text_clean = f"{orig}. {text_clean}"
+
+    # 2. Check for modification of pending review proposals
+    if pending_proposals:
+        lower = text_clean.lower()
+        target_idx = None
+        for word, idx in ORDINAL_MAP.items():
+            if word in lower:
+                target_idx = idx
+                break
+        if target_idx is not None and target_idx < len(pending_proposals):
+            prop = dict(pending_proposals[target_idx])
+            dur = prop.get("dur", 45)
+            if "shorter" in lower or "half" in lower:
+                dur = max(10, int(round((dur / 2.0) / 5.0)) * 5)
+            elif "longer" in lower:
+                dur = min(240, dur + 15)
+            min_match = re.search(r"(\d+)\s*(?:m|mins|minutes)", lower)
+            if min_match:
+                dur = max(5, int(min_match.group(1)))
+            prop["minutes"] = dur
+            prop["dur"] = dur
+
+            tasks_out = []
+            for i, p in enumerate(pending_proposals):
+                item = dict(p)
+                if i == target_idx:
+                    item["minutes"] = dur
+                    item["dur"] = dur
+                tasks_out.append(item)
+            return {
+                "intent": "plan",
+                "tasks": tasks_out,
+                "actions": [],
+                "breakdown": f"Updated proposal #{target_idx + 1} duration to {dur} minutes.",
+            }
+
+    # 3. Check for Actions on existing tasks
+    # 3a. Move action
+    m_move = MOVE_RE.match(text_clean)
+    if m_move:
+        target_name = m_move.group(1).strip()
+        dest = m_move.group(2).strip().lower()
+        matched = _find_matching_task(target_name, existing_tasks)
+        if matched and matched.get("id"):
+            action = {"type": "move", "task_id": matched["id"]}
+            if dest in ("today", "tomorrow"):
+                action["day"] = dest
+                action["rationale"] = f"Moved to {dest} as requested"
+            else:
+                action["start"] = dest
+                action["rationale"] = f"Rescheduled for {dest}"
+            return {
+                "intent": "act",
+                "tasks": [],
+                "actions": [action],
+                "breakdown": f"Moved '{matched.get('title')}' to {dest}.",
+            }
+
+    # 3b. Complete action
+    m_comp = COMPLETE_RE.match(text_clean)
+    if m_comp:
+        target_name = m_comp.group(1).strip()
+        matched = _find_matching_task(target_name, existing_tasks)
+        if matched and matched.get("id"):
+            return {
+                "intent": "act",
+                "tasks": [],
+                "actions": [
+                    {
+                        "type": "complete",
+                        "task_id": matched["id"],
+                        "rationale": "Marked complete as requested",
+                    }
+                ],
+                "breakdown": f"Marked '{matched.get('title')}' as done.",
+            }
+
+    # 3c. Delete action
+    m_del = DELETE_RE.match(text_clean)
+    if m_del:
+        target_name = m_del.group(1).strip()
+        matched = _find_matching_task(target_name, existing_tasks)
+        if matched and matched.get("id"):
+            return {
+                "intent": "act",
+                "tasks": [],
+                "actions": [
+                    {
+                        "type": "delete",
+                        "task_id": matched["id"],
+                        "rationale": "Deleted as requested",
+                    }
+                ],
+                "breakdown": f"Removed '{matched.get('title')}' from your plan.",
+            }
+
+    # 3d. Resize action
+    m_res = RESIZE_RE.match(text_clean)
+    if m_res:
+        target_name = m_res.group(1).strip()
+        mins = int(m_res.group(2))
+        matched = _find_matching_task(target_name, existing_tasks)
+        if matched and matched.get("id"):
+            return {
+                "intent": "act",
+                "tasks": [],
+                "actions": [
+                    {
+                        "type": "resize",
+                        "task_id": matched["id"],
+                        "minutes": mins,
+                        "rationale": f"Resized to {mins} minutes",
+                    }
+                ],
+                "breakdown": f"Resized '{matched.get('title')}' to {mins} minutes.",
+            }
+
+    # 3e. Merge action
+    m_mrg = MERGE_RE.match(text_clean)
+    if m_mrg:
+        t1_name = m_mrg.group(1).strip()
+        t2_name = m_mrg.group(2).strip()
+        match1 = _find_matching_task(t1_name, existing_tasks)
+        match2 = _find_matching_task(t2_name, existing_tasks)
+        if match1 and match2 and match1.get("id") and match2.get("id"):
+            combined_title = f"{match1.get('title')} & {match2.get('title')}"
+            return {
+                "intent": "act",
+                "tasks": [],
+                "actions": [
+                    {
+                        "type": "merge",
+                        "task_id": match1["id"],
+                        "target_task_id": match2["id"],
+                        "title": combined_title,
+                        "rationale": "Merged tasks together",
+                    }
+                ],
+                "breakdown": f"Merged '{match1.get('title')}' and '{match2.get('title')}'.",
+            }
+
+    # 4. Clarify check for ambiguous requests
+    if CLARIFY_AMBIGUOUS_RE.match(text_clean):
+        return {
+            "intent": "clarify",
+            "tasks": [],
+            "actions": [],
+            "breakdown": "When is your exam or appointment? Let me know the date or time so I can set up your prep tasks.",
+            "clarify_state": {
+                "original_request": text_clean,
+                "question": "When is your exam or appointment?",
+            },
+        }
+
+    # 5. Normal task generation
+    statements = split_statements(text_clean)
     if not statements:
-        return {"tasks": [], "breakdown": EMPTY_REPLY}
+        return {"intent": "chat", "tasks": [], "actions": [], "breakdown": EMPTY_REPLY}
 
     tasks = []
     for statement in statements:
         due = detect_due(statement)
-        title_source = strip_date_phrase(statement) if due and _explicit_date(statement) else statement
+        title_source = (
+            strip_date_phrase(statement)
+            if due and _explicit_date(statement)
+            else statement
+        )
+        task_name = task_title(title_source)
+
+        # Check duplicate against existing
+        is_duplicate = False
+        matched_exist = _find_matching_task(task_name, existing_tasks)
+        if matched_exist:
+            is_duplicate = True
+
+        kind = detect_kind(statement)
+        minutes = estimate_minutes(statement)
+        # Calibration check: if context has history indicating low completion, calibrate slightly
+        hist = context.get("completion_history")
+        if hist and isinstance(hist, dict) and hist.get("rate", 100) < 60:
+            minutes = int(round((minutes * 1.2) / 5.0)) * 5
+
         tasks.append(
             {
-                "title": task_title(title_source),
-                "minutes": estimate_minutes(statement),
+                "title": task_name,
+                "minutes": minutes,
                 "energy": estimate_energy(statement),
                 "priority": estimate_priority(statement),
                 "due": due,
+                "kind": kind,
+                "rationale": (
+                    "Similar to existing task; check if duplicate"
+                    if is_duplicate
+                    else f"Estimated {minutes}m based on task type"
+                ),
                 "steps": make_steps(title_source),
             }
         )
@@ -303,4 +590,9 @@ def breakdown(text: str) -> dict:
         f"{'s' if len(tasks) != 1 else ''}."
     )
 
-    return {"tasks": tasks, "breakdown": breakdown_text}
+    return {
+        "intent": "plan",
+        "tasks": tasks,
+        "actions": [],
+        "breakdown": breakdown_text,
+    }

@@ -4,6 +4,9 @@ export type ResolvedTheme = 'light' | 'dark';
 export type Energy = 'low' | 'medium' | 'high';
 export type Effort = 'low' | 'med' | 'high';
 export type Day = 'today' | 'tomorrow';
+export type TaskKind = 'task' | 'event' | 'reminder';
+export type CheckInIntent = 'plan' | 'chat' | 'clarify' | 'act';
+export type PlanActionType = 'move' | 'complete' | 'delete' | 'resize' | 'merge';
 export type Screen =
   | 'home'
   | 'plan'
@@ -34,6 +37,8 @@ export interface Task {
   steps: Step[];
   /** ISO calendar deadline, when the task is tied to a real date. */
   dueDate: string | null;
+  kind?: TaskKind;
+  rationale?: string | null;
 }
 
 export interface ParsedStep {
@@ -56,12 +61,34 @@ export interface ParsedTask {
   stuck?: boolean;
   steps?: ParsedStep[];
   dueDate?: string | null;
+  kind?: TaskKind;
+  rationale?: string | null;
+}
+
+export interface ActionOut {
+  type: PlanActionType;
+  taskId: string;
+  day?: Day | null;
+  start?: number | null;
+  dur?: number | null;
+  targetTaskId?: string | null;
+  title?: string | null;
+  rationale?: string | null;
+}
+
+export interface ClarifyState {
+  original_request: string;
+  question: string;
 }
 
 export interface ParsedCheckIn {
+  intent?: CheckInIntent;
   items: ParsedTask[];
+  actions?: ActionOut[];
   energy: Energy | null;
   reply: string;
+  capacity_warning?: string | null;
+  clarify_state?: ClarifyState | null;
   source?: 'gemini' | 'offline';
 }
 
@@ -76,6 +103,8 @@ export interface TaskProposal {
   dueText: string;
   warnings: string[];
   source: ParsedTask | null;
+  kind?: TaskKind;
+  rationale?: string | null;
 }
 
 export interface PendingCheckInReview {
@@ -109,7 +138,12 @@ export interface ChatMessage {
   id: string;
   from: 'bot' | 'me';
   text: string;
+  intent?: CheckInIntent;
   tasks?: ChatTaskLine[];
+  proposedTasks?: ParsedTask[];
+  actions?: ActionOut[];
+  source?: 'gemini' | 'offline';
+  capacityWarning?: string | null;
   cta?: ChatCta[];
 }
 

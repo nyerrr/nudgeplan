@@ -1,0 +1,259 @@
+[
+  {
+    "id": "gd-01",
+    "name": "Workday mix",
+    "dump": "Finish Q3 budget 2h, email Sarah about designs, call dentist at 2pm",
+    "context": {"start_h": 9, "end_h": 18, "energy": "medium"},
+    "expected_intent": "plan",
+    "expected_task_count": 3,
+    "keywords": ["budget", "sarah", "dentist"],
+    "expected_durations": [120, 10, 10],
+    "expected_kinds": ["task", "task", "event"]
+  },
+  {
+    "id": "gd-02",
+    "name": "Student study session",
+    "dump": "Study organic chemistry chapter 4 for 90m, read history pages 30m",
+    "context": {"start_h": 9, "end_h": 18, "energy": "high"},
+    "expected_intent": "plan",
+    "expected_task_count": 2,
+    "keywords": ["chemistry", "history"],
+    "expected_durations": [90, 30]
+  },
+  {
+    "id": "gd-03",
+    "name": "Home chores",
+    "dump": "Do laundry, wash dishes, take out trash, vacuum living room",
+    "context": {"start_h": 10, "end_h": 17, "energy": "medium"},
+    "expected_intent": "plan",
+    "expected_task_count": 4,
+    "keywords": ["laundry", "dishes", "trash", "vacuum"],
+    "expected_durations": [25, 25, 15, 25]
+  },
+  {
+    "id": "gd-04",
+    "name": "Fixed appointment tomorrow",
+    "dump": "Dentist appointment tomorrow at 10am, flight checkin at 6pm",
+    "context": {"start_h": 9, "end_h": 19},
+    "expected_intent": "plan",
+    "expected_task_count": 2,
+    "keywords": ["dentist", "flight"],
+    "expected_dates": ["tomorrow", "today"],
+    "expected_kinds": ["event", "event"]
+  },
+  {
+    "id": "gd-05",
+    "name": "Low energy day",
+    "dump": "I'm exhausted today. Just need to reply to boss and pay electric bill",
+    "context": {"start_h": 10, "end_h": 16, "energy": "low"},
+    "expected_intent": "plan",
+    "expected_task_count": 2,
+    "keywords": ["boss", "bill"],
+    "expected_kinds": ["task", "reminder"]
+  },
+  {
+    "id": "gd-06",
+    "name": "High energy writing",
+    "dump": "Feeling energized! Write project proposal 2h, outline architecture 1h, gym",
+    "context": {"start_h": 8, "end_h": 18, "energy": "high"},
+    "expected_intent": "plan",
+    "expected_task_count": 3,
+    "keywords": ["proposal", "architecture", "gym"],
+    "expected_durations": [120, 60, 40]
+  },
+  {
+    "id": "gd-07",
+    "name": "Single presentation prep",
+    "dump": "Need to prepare slides for Monday presentation 45m",
+    "context": {"start_h": 9, "end_h": 17},
+    "expected_intent": "plan",
+    "expected_task_count": 1,
+    "keywords": ["slides"],
+    "expected_durations": [45]
+  },
+  {
+    "id": "gd-08",
+    "name": "Ambiguous exam clarify",
+    "dump": "I have an exam",
+    "context": {"start_h": 9, "end_h": 17},
+    "expected_intent": "clarify",
+    "expected_task_count": 0
+  },
+  {
+    "id": "gd-09",
+    "name": "Ambiguous doctor clarify",
+    "dump": "Doctor appointment",
+    "context": {"start_h": 9, "end_h": 17},
+    "expected_intent": "clarify",
+    "expected_task_count": 0
+  },
+  {
+    "id": "gd-10",
+    "name": "Action move dentist",
+    "dump": "move the dentist to tomorrow",
+    "context": {
+      "tasks": [{"id": "t_dentist", "title": "Dentist appointment", "dur": 30, "day": "today", "pri": 2}]
+    },
+    "expected_intent": "act",
+    "expected_action_type": "move",
+    "expected_target_id": "t_dentist"
+  },
+  {
+    "id": "gd-11",
+    "name": "Action complete laundry",
+    "dump": "finish laundry",
+    "context": {
+      "tasks": [{"id": "t_laundry", "title": "Do laundry", "dur": 25, "day": "today", "pri": 2}]
+    },
+    "expected_intent": "act",
+    "expected_action_type": "complete",
+    "expected_target_id": "t_laundry"
+  },
+  {
+    "id": "gd-12",
+    "name": "Action delete task",
+    "dump": "delete gym from today",
+    "context": {
+      "tasks": [{"id": "t_gym", "title": "Go to gym", "dur": 40, "day": "today", "pri": 2}]
+    },
+    "expected_intent": "act",
+    "expected_action_type": "delete",
+    "expected_target_id": "t_gym"
+  },
+  {
+    "id": "gd-13",
+    "name": "Action resize task",
+    "dump": "resize presentation prep to 30 minutes",
+    "context": {
+      "tasks": [{"id": "t_pres", "title": "Presentation prep", "dur": 60, "day": "today", "pri": 2}]
+    },
+    "expected_intent": "act",
+    "expected_action_type": "resize",
+    "expected_target_id": "t_pres"
+  },
+  {
+    "id": "gd-14",
+    "name": "Action merge tasks",
+    "dump": "merge reading history and chapter notes",
+    "context": {
+      "tasks": [
+        {"id": "t_read", "title": "Reading history", "dur": 30, "day": "today", "pri": 2},
+        {"id": "t_notes", "title": "Chapter notes", "dur": 30, "day": "today", "pri": 2}
+      ]
+    },
+    "expected_intent": "act",
+    "expected_action_type": "merge",
+    "expected_target_id": "t_read"
+  },
+  {
+    "id": "gd-15",
+    "name": "Multi-day planning",
+    "dump": "Finish report today, review draft tomorrow, submit on Friday",
+    "context": {"start_h": 9, "end_h": 17},
+    "expected_intent": "plan",
+    "expected_task_count": 3,
+    "keywords": ["report", "draft", "submit"]
+  },
+  {
+    "id": "gd-16",
+    "name": "Explicit ISO deadline",
+    "dump": "File taxes due 2026-11-25, order books tomorrow",
+    "context": {"start_h": 9, "end_h": 17},
+    "expected_intent": "plan",
+    "expected_task_count": 2,
+    "keywords": ["taxes", "books"],
+    "expected_dates": ["2026-11-25", "tomorrow"]
+  },
+  {
+    "id": "gd-17",
+    "name": "Reminders",
+    "dump": "Remember to take vitamin D, pay rent by tonight",
+    "context": {"start_h": 9, "end_h": 17},
+    "expected_intent": "plan",
+    "expected_task_count": 2,
+    "keywords": ["vitamin", "rent"],
+    "expected_kinds": ["reminder", "task"]
+  },
+  {
+    "id": "gd-18",
+    "name": "Small talk greeting",
+    "dump": "Good morning! How are you doing today?",
+    "context": {"start_h": 9, "end_h": 17},
+    "expected_intent": "chat",
+    "expected_task_count": 0
+  },
+  {
+    "id": "gd-19",
+    "name": "Duplicate detection check",
+    "dump": "Email Sarah about designs",
+    "context": {
+      "tasks": [{"id": "t_sarah", "title": "Email Sarah about designs", "dur": 15, "day": "today", "pri": 2}]
+    },
+    "expected_intent": "plan",
+    "detect_duplicate": true
+  },
+  {
+    "id": "gd-20",
+    "name": "Overloaded capacity check",
+    "dump": "Write novel 3h, build website 3h, study for test 2h",
+    "context": {"start_h": 9, "end_h": 15, "planned_minutes": 120},
+    "expected_intent": "plan",
+    "expect_capacity_warning": true
+  },
+  {
+    "id": "gd-21",
+    "name": "Fixed meeting clock times",
+    "dump": "Team standup at 9:30am, sync with Alex at 3pm",
+    "context": {"start_h": 9, "end_h": 18},
+    "expected_intent": "plan",
+    "expected_task_count": 2,
+    "keywords": ["standup", "alex"],
+    "expected_kinds": ["event", "event"]
+  },
+  {
+    "id": "gd-22",
+    "name": "Pending proposals revision",
+    "dump": "make the second one shorter",
+    "context": {
+      "pending_proposals": [
+        {"index": 1, "key": "r1", "title": "Draft report", "dur": 60, "day": "today"},
+        {"index": 2, "key": "r2", "title": "Study physics", "dur": 60, "day": "today"}
+      ]
+    },
+    "expected_intent": "plan",
+    "expected_task_count": 2
+  },
+  {
+    "id": "gd-23",
+    "name": "Quick calls and chores",
+    "dump": "Call landlord, cancel gym membership",
+    "context": {"start_h": 9, "end_h": 18},
+    "expected_intent": "plan",
+    "expected_task_count": 2,
+    "keywords": ["landlord", "membership"],
+    "expected_durations": [10, 10]
+  },
+  {
+    "id": "gd-24",
+    "name": "Errands",
+    "dump": "Buy groceries, pick up dry cleaning tomorrow",
+    "context": {"start_h": 9, "end_h": 18},
+    "expected_intent": "plan",
+    "expected_task_count": 2,
+    "keywords": ["groceries", "cleaning"]
+  },
+  {
+    "id": "gd-25",
+    "name": "Clarification resume",
+    "dump": "Friday at 2pm, study 90 minutes",
+    "context": {
+      "clarify_state": {
+        "original_request": "I have an exam",
+        "question": "When is your exam?"
+      }
+    },
+    "expected_intent": "plan",
+    "expected_task_count": 1,
+    "keywords": ["exam"]
+  }
+]

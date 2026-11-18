@@ -28,15 +28,42 @@ export function CheckInScreen() {
     sendCheckIn,
     go,
     moveN,
+    lastCheckInSource,
   } = useApp();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
   const [showExamples, setShowExamples] = useState(false);
+  const [thinkingSeconds, setThinkingSeconds] = useState(0);
   const hasConversation = state.chat.length > 0;
+
+  useEffect(() => {
+    if (!typing) {
+      setThinkingSeconds(0);
+      return;
+    }
+    const start = Date.now();
+    const interval = setInterval(() => {
+      setThinkingSeconds(Math.round(((Date.now() - start) / 1000) * 10) / 10);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [typing]);
+
   const examples = [
     {
       title: 'Plan my workday',
       prompt: 'Finish the quarterly report 2h, call the dentist, reply to Sam\'s email, gym at 6pm',
+    },
+    {
+      title: 'I have an exam Friday',
+      prompt: 'I have an organic chemistry exam on Friday and need to prepare',
+    },
+    {
+      title: 'Plan my morning',
+      prompt: 'Plan my morning: draft the intro 45m, team standup at 10am, reply to emails',
+    },
+    {
+      title: 'I’m overwhelmed',
+      prompt: 'I’m overwhelmed with too much to do today, help me pick the top 3',
     },
     {
       title: 'I’m tired today',
@@ -46,6 +73,13 @@ export function CheckInScreen() {
       title: 'I’m feeling stuck',
       prompt: "I'm stuck on the budget spreadsheet",
     },
+  ];
+
+  const quickActions = [
+    { label: 'Lighter', prompt: 'Make my plan lighter for today' },
+    { label: 'Fewer tasks', prompt: 'Keep only top 2 most important tasks' },
+    { label: 'Move to tomorrow', prompt: 'Move remaining tasks to tomorrow' },
+    { label: 'Ask me one question', prompt: 'Ask me one question to help prioritize' },
   ];
   const { listening, start, supported } = useVoiceInput({
     onTranscript: (value) => {
@@ -106,6 +140,19 @@ export function CheckInScreen() {
               },
         ]}
       >
+        {!mine && message.source ? (
+          <View style={[styles.sourceBadge, { backgroundColor: colors.surface2 }]}>
+            <Icon
+              name={message.source === 'gemini' ? 'sparkles' : 'flash-outline'}
+              size={11}
+              color={colors.brand}
+            />
+            <Text style={[styles.sourceBadgeText, { color: colors.muted }]}>
+              {message.source === 'gemini' ? 'Gemini' : 'Offline'}
+            </Text>
+          </View>
+        ) : null}
+
         <Text
           style={[
             type.body,
@@ -118,7 +165,180 @@ export function CheckInScreen() {
           {message.text}
         </Text>
 
-        {message.tasks?.length ? (
+        {message.capacityWarning ? (
+          <View
+            style={[
+              styles.capacityWarningCard,
+              { backgroundColor: colors.surface2, borderColor: colors.warn },
+            ]}
+          >
+            <Icon name="alert-circle-outline" size={14} color={colors.warn} />
+            <Text
+              style={{
+                color: colors.ink,
+                fontFamily: fonts.medium,
+                fontSize: 12,
+                flex: 1,
+              }}
+            >
+              {message.capacityWarning}
+            </Text>
+          </View>
+        ) : null}
+
+        {message.actions?.length ? (
+          <View style={styles.actionsList}>
+            {message.actions.map((act, idx) => (
+              <View
+                key={`act-${idx}`}
+                style={[
+                  styles.actionCard,
+                  { backgroundColor: colors.surface2, borderColor: colors.line },
+                ]}
+              >
+                <Icon name="checkmark-circle" size={14} color={colors.low} />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.ink,
+                      fontFamily: fonts.medium,
+                      fontSize: 12.5,
+                    }}
+                  >
+                    {act.type.toUpperCase()}: {act.title || act.taskId}
+                  </Text>
+                  {act.rationale ? (
+                    <Text
+                      style={{
+                        color: colors.muted,
+                        fontFamily: fonts.regular,
+                        fontSize: 11.5,
+                        marginTop: 1,
+                      }}
+                    >
+                      {act.rationale}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {message.proposedTasks?.length ? (
+          <View style={styles.proposedCardsList}>
+            <Text
+              style={{
+                color: colors.muted,
+                fontFamily: fonts.semibold,
+                fontSize: 11.5,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+                marginTop: 2,
+              }}
+            >
+              Proposed Tasks ({message.proposedTasks.length})
+            </Text>
+            {message.proposedTasks.map((t, idx) => (
+              <View
+                key={`prop-${idx}`}
+                style={[
+                  styles.inlineTaskCard,
+                  { backgroundColor: colors.surface2, borderColor: colors.line },
+                ]}
+              >
+                <View style={styles.inlineTaskHeader}>
+                  <View style={styles.inlineTaskKindRow}>
+                    <View
+                      style={[
+                        styles.kindBadge,
+                        {
+                          backgroundColor:
+                            t.kind === 'event'
+                              ? colors.warn
+                              : t.kind === 'reminder'
+                                ? colors.surface
+                                : colors.brand,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color: colors.bg,
+                          fontFamily: fonts.semibold,
+                          fontSize: 10,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {t.kind ?? 'task'}
+                      </Text>
+                    </View>
+                    <Text
+                      style={{
+                        color: colors.ink,
+                        fontFamily: fonts.semibold,
+                        fontSize: 13,
+                        flex: 1,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {t.title}
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      color: colors.brand,
+                      fontFamily: fonts.semibold,
+                      fontSize: 12,
+                    }}
+                  >
+                    {t.dur}m
+                  </Text>
+                </View>
+                <View style={styles.inlineTaskMeta}>
+                  <Text
+                    style={{
+                      color: colors.muted,
+                      fontFamily: fonts.regular,
+                      fontSize: 11.5,
+                    }}
+                  >
+                    {t.day === 'tomorrow' ? 'Tomorrow' : 'Today'}
+                    {t.start != null
+                      ? ` at ${Math.floor(t.start / 60)}:${String(t.start % 60).padStart(2, '0')}`
+                      : ''}
+                    {t.dueDate ? ` · Due ${t.dueDate}` : ''}
+                    {` · ${t.effort} effort`}
+                  </Text>
+                  {t.steps?.length ? (
+                    <Text
+                      style={{
+                        color: colors.muted,
+                        fontFamily: fonts.medium,
+                        fontSize: 11,
+                      }}
+                    >
+                      {t.steps.length} steps
+                    </Text>
+                  ) : null}
+                </View>
+                {t.rationale ? (
+                  <Text
+                    style={{
+                      color: colors.muted,
+                      fontFamily: fonts.regular,
+                      fontStyle: 'italic',
+                      fontSize: 11,
+                      marginTop: 2,
+                    }}
+                  >
+                    {t.rationale}
+                  </Text>
+                ) : null}
+              </View>
+            ))}
+          </View>
+        ) : message.tasks?.length ? (
           <View style={styles.added}>
             <View style={styles.addedSummary}>
               <Text
@@ -261,8 +481,76 @@ export function CheckInScreen() {
                 { backgroundColor: colors.low, opacity: 0.4 },
               ]}
             />
+            <Text
+              style={{
+                fontSize: 12,
+                fontFamily: fonts.medium,
+                color: colors.muted,
+                marginLeft: 6,
+              }}
+            >
+              Thinking... ({thinkingSeconds.toFixed(1)}s)
+            </Text>
           </View>
         ) : null}
+      </ScrollView>
+
+      {lastCheckInSource === 'offline' && !typing ? (
+        <View style={{ alignItems: 'flex-start', marginHorizontal: 18, marginTop: 4 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Try again with Gemini"
+            onPress={() => {
+              const lastUser = [...state.chat].reverse().find((m) => m.from === 'me');
+              if (lastUser) void sendCheckIn(lastUser.text);
+            }}
+            style={[
+              styles.retryBtn,
+              { backgroundColor: colors.surface, borderColor: colors.line },
+            ]}
+          >
+            <Icon name="refresh-outline" size={13} color={colors.brand} />
+            <Text
+              style={{
+                fontSize: 12,
+                fontFamily: fonts.medium,
+                color: colors.brand,
+              }}
+            >
+              Try again with Gemini
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.quickActionsContainer}
+      >
+        {quickActions.map((qa) => (
+          <Pressable
+            key={qa.label}
+            accessibilityRole="button"
+            accessibilityLabel={qa.label}
+            disabled={typing}
+            onPress={() => void sendCheckIn(qa.prompt)}
+            style={[
+              styles.quickActionChip,
+              { backgroundColor: colors.surface, borderColor: colors.line },
+            ]}
+          >
+            <Text
+              style={{
+                color: colors.ink,
+                fontFamily: fonts.medium,
+                fontSize: 12,
+              }}
+            >
+              {qa.label}
+            </Text>
+          </Pressable>
+        ))}
       </ScrollView>
 
       <View style={[styles.chatbar, { backgroundColor: colors.bg, paddingBottom: Math.max(insets.bottom, 14) }]}>
@@ -290,7 +578,7 @@ export function CheckInScreen() {
                 key={example.title}
                 accessibilityRole="button"
                 accessibilityLabel={example.title}
-                disabled={typing || !!pendingReview}
+                disabled={typing}
                 onPress={() => void sendCheckIn(example.prompt)}
                 style={[styles.compactExample, { backgroundColor: colors.surface, borderColor: colors.line }]}
               >
@@ -312,7 +600,7 @@ export function CheckInScreen() {
             value={text}
             onChangeText={setText}
             onSubmitEditing={submit}
-            editable={!typing && !pendingReview}
+            editable={!typing}
             placeholder={listening ? 'Listening...' : 'Tell me about your day...'}
             placeholderTextColor={colors.muted}
             selectionColor={colors.brand}
@@ -322,7 +610,7 @@ export function CheckInScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Voice input"
-            disabled={!supported || typing || !!pendingReview}
+            disabled={!supported || typing}
             onPress={listen}
             style={[
               styles.round,
@@ -345,12 +633,12 @@ export function CheckInScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Send"
-            accessibilityState={{ disabled: typing || !!pendingReview }}
-            disabled={typing || !!pendingReview}
+            accessibilityState={{ disabled: typing }}
+            disabled={typing}
             onPress={submit}
             style={[
               styles.round,
-              { backgroundColor: colors.brand, opacity: typing || !!pendingReview ? 0.5 : 1 },
+              { backgroundColor: colors.brand, opacity: typing ? 0.5 : 1 },
             ]}
           >
             <Icon name="send" size={18} color={colors.onBrand} />
@@ -509,5 +797,98 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sourceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  sourceBadgeText: {
+    fontSize: 10.5,
+    fontFamily: fonts.medium,
+  },
+  capacityWarningCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginTop: 4,
+  },
+  actionsList: {
+    gap: 6,
+    marginTop: 4,
+  },
+  actionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  proposedCardsList: {
+    gap: 6,
+    marginTop: 6,
+  },
+  inlineTaskCard: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    gap: 4,
+  },
+  inlineTaskHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inlineTaskKindRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  kindBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  inlineTaskMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  quickActionsContainer: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+  },
+  quickActionChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    minHeight: 32,
+    justifyContent: 'center',
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    marginBottom: 6,
   },
 });

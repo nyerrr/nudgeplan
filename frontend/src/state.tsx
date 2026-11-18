@@ -34,6 +34,7 @@ import {
   moveTasks,
   newId,
   parseBrainDump,
+  peakHours,
   planTasks,
   remainingSeconds,
   rollover,
@@ -70,6 +71,7 @@ import type {
   AiStatus,
   AppState,
   ChatMessage,
+  ClarifyState,
   Day,
   Energy,
   OnboardingProfile,
@@ -152,6 +154,7 @@ interface AppContextValue {
   cloudSyncStatus: CloudSyncStatus;
   retryCloudSync: () => void;
   lastNudge: NudgeInfo | null;
+  lastCheckInSource: 'gemini' | 'offline' | null;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -179,6 +182,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [pendingReview, setPendingReview] = useState<PendingCheckInReview | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const pendingReviewRef = useRef<PendingCheckInReview | null>(null);
+  const clarifyStateRef = useRef<ClarifyState | null>(null);
+  const [lastCheckInSource, setLastCheckInSource] = useState<'gemini' | 'offline' | null>(null);
   const checkInInFlight = useRef(false);
   const checkInGeneration = useRef(0);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -215,6 +220,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     checkInInFlight.current = false;
     setTyping(false);
     pendingReviewRef.current = null;
+    clarifyStateRef.current = null;
     setPendingReview(null);
     setReviewError(null);
   }, [userId]);
@@ -1030,7 +1036,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const sendCheckIn = useCallback(
     async (raw: string) => {
       const text = raw.trim().slice(0, 4000);
-      if (!text || checkInInFlight.current || pendingReviewRef.current) return false;
+      if (!text || checkInInFlight.current) return false;
       checkInInFlight.current = true;
       const requestGeneration = ++checkInGeneration.current;
       const requestOwner = userIdRef.current;
@@ -1055,21 +1061,81 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           .slice(-6)
           .map((message) => ({ from: message.from, text: message.text }));
         const planTasks = snapshotState.tasks
-          .filter(
-            (task) =>
-              !task.done && (task.day === 'today' || task.day === 'tomorrow'),
-          )
-          .slice(0, 12)
+          .slice(0, 16)
           .map((task) => ({
+            id: task.id,
             title: task.title,
             dur: task.dur,
             day: task.day,
             pri: task.pri,
+            start: task.start,
+            fixed: task.fixed,
+            done: task.done,
+            kind: task.kind,
             dueDate: task.dueDate,
           }));
         const plannedMinutes = snapshotState.tasks
           .filter((task) => !task.done && task.day === 'today')
           .reduce((total, task) => total + task.dur, 0);
+
+        // Schedule gaps for today
+        const todayBusy = snapshotState.tasks
+          .filter((t) => t.day === 'today' && t.start != null)
+          .map((t) => ({ start: t.start!, end: t.start! + t.dur }))
+          .sort((a, b) => a.start - b.start);
+
+        const winStart = snapshotState.startH * 60;
+        const winEnd = snapshotState.endH * 60;
+        const scheduleGaps: Array<{ start: string; end: string; dur: number }> = [];
+        let cursor = winStart;
+        for (const b of todayBusy) {
+          if (b.start > cursor) {
+            const gapDur = b.start - cursor;
+            if (gapDur >= 15) {
+              scheduleGaps.push({
+                start: `${Math.floor(cursor / 60)}:${pad(cursor % 60)}`,
+                end: `${Math.floor(b.start / 60)}:${pad(b.start % 60)}`,
+                dur: gapDur,
+              });
+            }
+          }
+          cursor = Math.max(cursor, b.end);
+        }
+        if (winEnd > cursor) {
+          const gapDur = winEnd - cursor;
+          if (gapDur >= 15) {
+            scheduleGaps.push({
+              start: `${Math.floor(cursor / 60)}:${pad(cursor % 60)}`,
+              end: `${Math.floor(winEnd / 60)}:${pad(winEnd % 60)}`,
+              dur: gapDur,
+            });
+          }
+        }
+
+        const peaks = peakHours(snapshotState.startH, snapshotState.endH, snapshotState.energy);
+        const peakHoursStr = peaks.map((h) => `${pad(h)}:00`).join(', ');
+
+        const recentDaily = snapshotState.daily.slice(-7);
+        const totalPlanned = recentDaily.reduce((acc, d) => acc + d.total, 0);
+        const totalDone = recentDaily.reduce((acc, d) => acc + d.done, 0);
+        const completionRateStr =
+          totalPlanned > 0
+            ? `${Math.round((totalDone / totalPlanned) * 100)}% (${totalDone}/${totalPlanned} completed)`
+            : undefined;
+
+        const pendingProposals = pendingReviewRef.current?.proposals.map((p, idx) => ({
+          index: idx + 1,
+          key: p.key,
+          title: p.title,
+          dur: Number(p.durationText) || 45,
+          day: p.day,
+          pri: p.priority,
+          start: p.startText || null,
+          due: p.dueText || null,
+        }));
+
+        const idempotencyKey = newId('idem');
+
         let response = null;
         try {
           response = await requestCheckIn(
@@ -1083,16 +1149,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               plannedMinutes,
               nowIso,
               timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              scheduleGaps,
+              peakHours: peakHoursStr,
+              completionHistory: completionRateStr,
+              pendingProposals,
+              clarifyState: clarifyStateRef.current,
+              idempotencyKey,
             },
           );
         } catch {
           response = null;
         }
         if (userIdRef.current !== requestOwner) return false;
-        if (response) recordAi(response.source, response.model);
-        else setAiStatus('offline');
+        if (response) {
+          recordAi(response.source, response.model);
+          setLastCheckInSource(response.source ?? 'gemini');
+        } else {
+          setAiStatus('offline');
+          setLastCheckInSource('offline');
+        }
+
         const local = parseBrainDump(text);
         const parsed: ParsedCheckIn = response ?? {
+          intent: 'plan',
           items: local.items,
           energy: local.energy,
           reply: '',
@@ -1106,7 +1185,56 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               ...latest,
               chat: [...latest.chat, userMessage].slice(-MAX_CHAT_MESSAGES),
             };
-        if (parsed.items.length) {
+
+        // 1. Clarify flow
+        if (parsed.intent === 'clarify') {
+          clarifyStateRef.current = parsed.clarify_state ?? {
+            original_request: text,
+            question: parsed.reply,
+          };
+          const botMessage: ChatMessage = {
+            id: newId('m'),
+            from: 'bot',
+            text: parsed.reply,
+            intent: 'clarify',
+            source: parsed.source,
+          };
+          commit({
+            ...base,
+            chat: [...base.chat, botMessage].slice(-MAX_CHAT_MESSAGES),
+          });
+          return true;
+        }
+        clarifyStateRef.current = null;
+
+        // 2. Modifying pending proposals
+        if (pendingReviewRef.current && parsed.items.length) {
+          const review = createTaskReview(
+            { ...parsed, reply: '' },
+            text,
+            latest.tasks,
+          );
+          pendingReviewRef.current = review;
+          setPendingReview(review);
+          setReviewError(null);
+          const botMessage: ChatMessage = {
+            id: newId('m'),
+            from: 'bot',
+            text: parsed.reply || 'Updated your review proposals.',
+            intent: 'plan',
+            proposedTasks: parsed.items,
+            source: parsed.source,
+            capacityWarning: parsed.capacity_warning,
+          };
+          commit({
+            ...base,
+            chat: [...base.chat, botMessage].slice(-MAX_CHAT_MESSAGES),
+          });
+          return true;
+        }
+
+        // 3. New plan proposals to review
+        if (parsed.items.length && parsed.intent === 'plan') {
           const count = parsed.items.length;
           const reply =
             parsed.reply?.trim() ||
@@ -1115,6 +1243,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             id: newId('m'),
             from: 'bot',
             text: reply,
+            intent: 'plan',
+            proposedTasks: parsed.items,
+            actions: parsed.actions,
+            source: parsed.source,
+            capacityWarning: parsed.capacity_warning,
           };
           commit({
             ...base,
@@ -1129,6 +1262,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setPendingReview(review);
           setReviewError(null);
         } else {
+          // Actions or chat turn
           if (parsed.energy) snapshot();
           const applied = applyCheckIn(base, parsed);
           commit(applied.state);
@@ -1197,6 +1331,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const cancelTaskReview = useCallback(() => {
     if (!pendingReviewRef.current) return;
     pendingReviewRef.current = null;
+    clarifyStateRef.current = null;
     setPendingReview(null);
     setReviewError(null);
     setState((current) => appendReviewCancellation(current));
@@ -1214,6 +1349,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     pendingReviewRef.current = null;
+    clarifyStateRef.current = null;
     setPendingReview(null);
     setReviewError(null);
     const parsed = approvedCheckIn(review);
@@ -1317,6 +1453,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     await clearState(userIdRef.current);
     pendingReviewRef.current = null;
+    clarifyStateRef.current = null;
     setPendingReview(null);
     setReviewError(null);
     nudgeKeyRef.current = '';
@@ -1463,6 +1600,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       cloudSyncStatus,
       retryCloudSync,
       lastNudge,
+      lastCheckInSource,
     }),
     [
       state,
@@ -1522,6 +1660,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       cloudSyncStatus,
       retryCloudSync,
       lastNudge,
+      lastCheckInSource,
     ],
   );
 

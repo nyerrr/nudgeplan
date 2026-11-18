@@ -508,6 +508,103 @@ def test_offline_checkin_and_steps() -> None:
     print("[OK] offline check-in and steps: dates and micro-steps still work")
 
 
+def test_actions_intent() -> None:
+    main.MOCK = True
+    main.HAS_REAL_KEY = False
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.app) as client:
+        res = client.post(
+            "/plan/checkin",
+            json={
+                "text": "move the dentist to tomorrow",
+                "tasks": [
+                    {"id": "task_1", "title": "Dentist appointment", "dur": 30, "day": "today", "pri": 2}
+                ],
+            },
+        )
+    expect(res.status_code == 200, f"action checkin failed: {res.text}")
+    body = res.json()
+    expect(body["intent"] == "act", f"expected intent 'act', got {body.get('intent')}")
+    expect(len(body["actions"]) == 1, f"expected 1 action, got {len(body.get('actions', []))}")
+    expect(body["actions"][0]["type"] == "move", "expected move action")
+    expect(body["actions"][0]["taskId"] == "task_1", "expected taskId task_1")
+    expect(body["actions"][0]["day"] == "tomorrow", "expected day tomorrow")
+    print("[OK] actions intent: move dentist to tomorrow executed")
+
+
+def test_clarify_flow() -> None:
+    main.MOCK = True
+    main.HAS_REAL_KEY = False
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.app) as client:
+        # Step 1: ambiguous request triggers clarify
+        res1 = client.post("/plan/checkin", json={"text": "I have an exam"})
+        expect(res1.status_code == 200, f"clarify checkin failed: {res1.text}")
+        body1 = res1.json()
+        expect(body1["intent"] == "clarify", f"expected clarify, got {body1.get('intent')}")
+        expect(bool(body1["clarify_state"]), "expected clarify_state to be saved")
+        expect(len(body1["items"]) == 0, "clarify should not produce tasks yet")
+
+        # Step 2: answering the clarification completes the request
+        res2 = client.post(
+            "/plan/checkin",
+            json={
+                "text": "It is on Friday at 2pm, I want to study chemistry for 2 hours",
+                "clarify_state": body1["clarify_state"],
+            },
+        )
+        expect(res2.status_code == 200, f"clarify answer failed: {res2.text}")
+        body2 = res2.json()
+        expect(body2["intent"] == "plan", f"expected plan, got {body2.get('intent')}")
+        expect(len(body2["items"]) > 0, "clarified request should produce tasks")
+    print("[OK] clarify flow: ambiguous input triggers question and resumes cleanly")
+
+
+def test_pending_proposals_modification() -> None:
+    main.MOCK = True
+    main.HAS_REAL_KEY = False
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.app) as client:
+        res = client.post(
+            "/plan/checkin",
+            json={
+                "text": "make the second one shorter",
+                "pending_proposals": [
+                    {"index": 1, "key": "r1", "title": "Draft report", "dur": 60, "day": "today"},
+                    {"index": 2, "key": "r2", "title": "Study physics", "dur": 60, "day": "today"},
+                ],
+            },
+        )
+    expect(res.status_code == 200, f"pending proposals revision failed: {res.text}")
+    body = res.json()
+    expect(body["intent"] == "plan", "expected plan intent for revision")
+    expect(len(body["items"]) == 2, "expected 2 items")
+    expect(body["items"][1]["dur"] < 60, f"expected proposal 2 to be shorter, got {body['items'][1]['dur']}")
+    print("[OK] pending review proposals: modified via chat turn")
+
+
+def test_idempotency_cache() -> None:
+    main.MOCK = True
+    main.HAS_REAL_KEY = False
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.app) as client:
+        res1 = client.post(
+            "/plan/checkin",
+            json={"text": "write essay 45m", "idempotency_key": "idem-abc-123"},
+        )
+        res2 = client.post(
+            "/plan/checkin",
+            json={"text": "write essay 45m", "idempotency_key": "idem-abc-123"},
+        )
+    expect(res1.status_code == 200 and res2.status_code == 200, "idempotency requests failed")
+    expect(res1.json() == res2.json(), "idempotency responses must match exactly")
+    print("[OK] idempotency key: cached response returned for retries")
+
+
 def main_check() -> int:
     test_clean_json()
     test_markdown_fence()
@@ -528,6 +625,10 @@ def main_check() -> int:
     test_checkin_rejects_vague_first_step()
     test_step_timers_fit_budget()
     test_offline_checkin_and_steps()
+    test_actions_intent()
+    test_clarify_flow()
+    test_pending_proposals_modification()
+    test_idempotency_cache()
 
     print("\n[OK] All pipeline cases passed.")
     return 0

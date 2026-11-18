@@ -236,4 +236,114 @@ describe('scheduling from the current time', () => {
       vi.useRealTimers();
     }
   });
+
+  it('applies actions (move, complete, delete, resize, merge) in check-in', () => {
+    const base = {
+      ...initialState(),
+      tasks: [
+        {
+          id: 't_dentist',
+          title: 'Dentist appointment',
+          dur: 30,
+          effort: 'low' as const,
+          day: 'today' as const,
+          pri: 2 as const,
+          start: null,
+          fixed: false,
+          done: false,
+          steps: [],
+          dueDate: null,
+        },
+        {
+          id: 't_report',
+          title: 'Quarterly report',
+          dur: 60,
+          effort: 'high' as const,
+          day: 'today' as const,
+          pri: 3 as const,
+          start: null,
+          fixed: false,
+          done: false,
+          steps: [],
+          dueDate: null,
+        },
+      ],
+    };
+
+    // Test Move & Complete
+    const resMove = applyCheckIn(base, {
+      items: [],
+      energy: null,
+      reply: 'Moved dentist to tomorrow',
+      intent: 'act',
+      actions: [
+        { type: 'move', taskId: 't_dentist', day: 'tomorrow' },
+        { type: 'complete', taskId: 't_report' },
+      ],
+    });
+
+    const dentist = resMove.state.tasks.find((t) => t.id === 't_dentist');
+    const report = resMove.state.tasks.find((t) => t.id === 't_report');
+    expect(dentist?.day).toBe('tomorrow');
+    expect(report?.done).toBe(true);
+    expect(resMove.message.actions).toHaveLength(2);
+
+    // Test Resize & Delete
+    const resResizeDelete = applyCheckIn(base, {
+      items: [],
+      energy: null,
+      reply: 'Resized report, deleted dentist',
+      intent: 'act',
+      actions: [
+        { type: 'resize', taskId: 't_report', dur: 45 },
+        { type: 'delete', taskId: 't_dentist' },
+      ],
+    });
+
+    expect(resResizeDelete.state.tasks.find((t) => t.id === 't_dentist')).toBeUndefined();
+    expect(resResizeDelete.state.tasks.find((t) => t.id === 't_report')?.dur).toBe(45);
+
+    // Test Merge
+    const resMerge = applyCheckIn(base, {
+      items: [],
+      energy: null,
+      reply: 'Merged tasks',
+      intent: 'act',
+      actions: [
+        { type: 'merge', taskId: 't_report', targetTaskId: 't_dentist', title: 'Report & Dentist' },
+      ],
+    });
+
+    expect(resMerge.state.tasks).toHaveLength(1);
+    expect(resMerge.state.tasks[0].title).toBe('Report & Dentist');
+    expect(resMerge.state.tasks[0].dur).toBe(90);
+  });
+
+  it('attaches capacity_warning and task kinds to message and tasks', () => {
+    const base = initialState();
+    const res = applyCheckIn(base, {
+      items: [
+        {
+          title: 'Review flight info',
+          dur: 20,
+          effort: 'low',
+          day: 'today',
+          pri: 2,
+          start: null,
+          fixed: false,
+          kind: 'event',
+          rationale: 'Scheduled as fixed calendar block',
+        },
+      ],
+      energy: null,
+      reply: 'Found flight info',
+      intent: 'plan',
+      capacity_warning: '5h planned vs 4h free',
+    });
+
+    expect(res.state.tasks[0].kind).toBe('event');
+    expect(res.state.tasks[0].rationale).toBe('Scheduled as fixed calendar block');
+    expect(res.message.capacityWarning).toBe('5h planned vs 4h free');
+    expect(res.message.text).toContain('5h planned vs 4h free');
+  });
 });

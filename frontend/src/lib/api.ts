@@ -2,9 +2,11 @@ import { Platform } from 'react-native';
 
 import type {
   CheckInApiResponse,
+  ClarifyState,
   Energy,
   ParsedStep,
   StepsApiResponse,
+  TaskKind,
 } from '../types';
 import { supabase } from './supabase';
 
@@ -131,18 +133,38 @@ function toSteps(input: unknown): ParsedStep[] {
 export interface CheckInContext {
   /** Recent turns only; the backend also caps these. */
   history?: Array<{ from: 'me' | 'bot'; text: string }>;
-  /** A compact view of the current plan, not the whole state. */
+  /** A compact view of the current plan with task IDs, start times, and status. */
   tasks?: Array<{
+    id?: string;
     title: string;
     dur: number;
     day: string;
     pri: number;
+    start?: number | null;
+    fixed?: boolean;
+    done?: boolean;
+    kind?: TaskKind;
     dueDate?: string | null;
   }>;
   plannedMinutes?: number;
   /** The user's local ISO date/time, so relative dates use their clock. */
   nowIso?: string;
   timezone?: string;
+  scheduleGaps?: Array<{ start: string; end: string; dur: number }> | string;
+  peakHours?: string;
+  completionHistory?: string | { rate: number };
+  pendingProposals?: Array<{
+    index: number;
+    key: string;
+    title: string;
+    dur: number;
+    day: string;
+    pri: number;
+    start?: string | null;
+    due?: string | null;
+  }>;
+  clarifyState?: ClarifyState | null;
+  idempotencyKey?: string;
 }
 
 export async function requestCheckIn(
@@ -161,21 +183,37 @@ export async function requestCheckIn(
       from: turn.from,
       text: turn.text.slice(0, 400),
     })),
-    tasks: context?.tasks?.slice(0, 12).map((task) => ({
+    tasks: context?.tasks?.slice(0, 16).map((task) => ({
+      id: task.id,
       title: task.title.slice(0, 80),
       dur: task.dur,
       day: task.day,
       pri: task.pri,
+      start: task.start ?? null,
+      fixed: task.fixed ?? false,
+      done: task.done ?? false,
+      kind: task.kind,
       dueDate: task.dueDate ?? null,
     })),
     planned_minutes: context?.plannedMinutes ?? 0,
     now: context?.nowIso,
     timezone: context?.timezone,
+    schedule_gaps: context?.scheduleGaps,
+    peak_hours: context?.peakHours,
+    completion_history: context?.completionHistory,
+    pending_proposals: context?.pendingProposals,
+    clarify_state: context?.clarifyState,
+    idempotency_key: context?.idempotencyKey,
   });
   if (!data || !Array.isArray(data.items)) return null;
-  // An empty plan can still carry a useful energy reading or reply. Only fall
-  // back to the local parser when the response is completely empty.
-  if (data.items.length === 0 && !data.energy && !data.reply?.trim()) {
+  // An empty plan can still carry actions, a clarify turn, or chat reply.
+  if (
+    data.items.length === 0 &&
+    !data.actions?.length &&
+    data.intent !== 'clarify' &&
+    !data.energy &&
+    !data.reply?.trim()
+  ) {
     return null;
   }
   return data;

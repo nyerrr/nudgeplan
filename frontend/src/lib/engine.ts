@@ -1103,6 +1103,8 @@ function toTask(item: ParsedTask): Task {
       done: step.done ?? false,
     })),
     dueDate: item.dueDate ?? null,
+    kind: item.kind ?? 'task',
+    rationale: item.rationale ?? null,
   };
 }
 
@@ -1116,7 +1118,58 @@ export function applyCheckIn(
   parsed: ParsedCheckIn,
 ): CheckInResult {
   const added = parsed.items.map(toTask);
-  const hasChange = added.length > 0 || parsed.energy != null;
+  let currentTasks = [...state.tasks];
+  const executedActions: string[] = [];
+
+  if (parsed.actions?.length) {
+    for (const act of parsed.actions) {
+      if (act.type === 'delete') {
+        const target = currentTasks.find((t) => t.id === act.taskId);
+        currentTasks = currentTasks.filter((t) => t.id !== act.taskId);
+        if (target) executedActions.push(act.rationale || `Deleted "${target.title}"`);
+      } else if (act.type === 'complete') {
+        currentTasks = currentTasks.map((t) =>
+          t.id === act.taskId ? { ...t, done: true } : t,
+        );
+        const target = currentTasks.find((t) => t.id === act.taskId);
+        if (target) executedActions.push(act.rationale || `Completed "${target.title}"`);
+      } else if (act.type === 'move') {
+        currentTasks = currentTasks.map((t) => {
+          if (t.id !== act.taskId) return t;
+          const nextDay = act.day ?? t.day;
+          const nextStart = act.start !== undefined ? act.start : t.start;
+          return {
+            ...t,
+            day: nextDay,
+            start: nextStart,
+            fixed: nextStart != null,
+          };
+        });
+        const target = currentTasks.find((t) => t.id === act.taskId);
+        if (target) executedActions.push(act.rationale || `Moved "${target.title}"`);
+      } else if (act.type === 'resize') {
+        currentTasks = currentTasks.map((t) =>
+          t.id === act.taskId ? { ...t, dur: act.dur ?? t.dur } : t,
+        );
+        const target = currentTasks.find((t) => t.id === act.taskId);
+        if (target) executedActions.push(act.rationale || `Resized "${target.title}" to ${act.dur}m`);
+      } else if (act.type === 'merge') {
+        const t1 = currentTasks.find((t) => t.id === act.taskId);
+        const t2 = currentTasks.find((t) => t.id === act.targetTaskId);
+        if (t1 && t2) {
+          const mergedTitle = act.title || `${t1.title} & ${t2.title}`;
+          const mergedDur = t1.dur + t2.dur;
+          currentTasks = currentTasks
+            .filter((t) => t.id !== act.targetTaskId)
+            .map((t) => (t.id === act.taskId ? { ...t, title: mergedTitle, dur: mergedDur } : t));
+          executedActions.push(act.rationale || `Merged "${t1.title}" and "${t2.title}"`);
+        }
+      }
+    }
+  }
+
+  const hasChange =
+    added.length > 0 || (parsed.actions && parsed.actions.length > 0) || parsed.energy != null;
 
   if (!hasChange) {
     const message: ChatMessage = {
@@ -1125,6 +1178,9 @@ export function applyCheckIn(
       text:
         parsed.reply ||
         'Hi! Tell me what you need to get done — even a messy list works. Try: Write report 2h, call Sam at 4pm, gym tomorrow.',
+      intent: parsed.intent ?? 'chat',
+      source: parsed.source,
+      capacityWarning: parsed.capacity_warning,
       cta: [
         { label: 'Check in again', act: 'checkin', ghost: true },
         { label: 'View plan', act: 'plan', ghost: true },
@@ -1141,7 +1197,7 @@ export function applyCheckIn(
 
   const energy = parsed.energy ?? state.energy;
   const tasks = planTasks(
-    [...state.tasks, ...added],
+    [...currentTasks, ...added],
     state.startH,
     state.endH,
     energy,
@@ -1160,6 +1216,9 @@ export function applyCheckIn(
     .filter(Boolean);
 
   if (!lines.length) {
+    if (executedActions.length) {
+      lines.push(...executedActions);
+    }
     if (energy === 'low') lines.push('Low energy noted. I will protect your open hours.');
     if (energy === 'high') lines.push('Good energy noted. I will use your peak hours well.');
     if (added.length) {
@@ -1169,15 +1228,19 @@ export function applyCheckIn(
     }
   }
 
+  if (parsed.capacity_warning) {
+    lines.push(`⚠️ Capacity note: ${parsed.capacity_warning}`);
+  }
+
   const stuck = addedPlanned.find((task) => task.steps.length);
-  if (stuck) {
+  if (stuck && !lines.some((l) => l.includes(stuck.title))) {
     lines.push(`I split "${stuck.title}" into ${stuck.steps.length} small steps.`);
   }
 
   const future = addedPlanned.find(
     (task) => task.dueDate && task.dueDate > todayIso(1),
   );
-  if (future?.dueDate) {
+  if (future?.dueDate && !lines.some((l) => l.includes(dueDateLabel(future.dueDate!)))) {
     lines.push(`Deadline noted: ${dueDateLabel(future.dueDate)}.`);
   }
 
@@ -1210,6 +1273,11 @@ export function applyCheckIn(
     id: newId('m'),
     from: 'bot',
     text: lines.join('\n'),
+    intent: parsed.intent ?? (added.length ? 'plan' : 'act'),
+    actions: parsed.actions,
+    proposedTasks: parsed.items,
+    source: parsed.source,
+    capacityWarning: parsed.capacity_warning,
     tasks: addedPlanned.map((task) => ({
       title: task.title,
       when:
