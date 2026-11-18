@@ -189,7 +189,7 @@
     "context": {
       "tasks": [{"id": "t_sarah", "title": "Email Sarah about designs", "dur": 15, "day": "today", "pri": 2}]
     },
-    "expected_intent": "plan",
+    "expected_intent": "clarify",
     "detect_duplicate": true
   },
   {

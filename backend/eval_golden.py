@@ -102,15 +102,18 @@ def run_evaluation() -> int:
         # Duplicate detection check
         if case.get("detect_duplicate"):
             duplicate_checks += 1
-            # Check if any task rationale or breakdown mentions duplicate or existing
             items = body.get("items", [])
+            actions = body.get("actions", [])
+            reply_lower = body.get("reply", "").lower()
             rationale_hit = any(
-                "similar" in (item.get("rationale") or "").lower()
-                or "duplicate" in (item.get("rationale") or "").lower()
+                any(w in (item.get("rationale") or "").lower() for w in ("similar", "duplicate", "merge"))
                 for item in items
             )
-            breakdown_hit = "already" in body.get("reply", "").lower() or "duplicate" in body.get("reply", "").lower()
-            if rationale_hit or breakdown_hit:
+            breakdown_hit = any(
+                w in reply_lower for w in ("already", "duplicate", "similar", "merge", "add separately")
+            )
+            action_hit = any(a.get("type") == "merge" for a in actions)
+            if rationale_hit or breakdown_hit or action_hit:
                 duplicate_detected += 1
 
         # Task recall and precision

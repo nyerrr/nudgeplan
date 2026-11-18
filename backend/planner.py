@@ -427,6 +427,53 @@ def breakdown(text: str, context: dict | None = None) -> dict:
 
     # 1. Check if this completes a previous clarify flow
     if clarify_state and clarify_state.get("original_request"):
+        # Duplicate-resolution clarify: "merge/update" vs "add separately"
+        if clarify_state.get("matched_task_id") and clarify_state.get("draft_task"):
+            ans = text_clean.lower()
+            draft = dict(clarify_state["draft_task"])
+            matched_id = clarify_state["matched_task_id"]
+            matched_title = clarify_state.get("matched_task_title") or "the existing task"
+            if re.search(r"\b(merge|update|replace|combine|use existing|keep existing)\b", ans):
+                minutes = int(draft.get("minutes") or draft.get("dur") or 30)
+                actions = [
+                    {
+                        "type": "resize",
+                        "task_id": matched_id,
+                        "minutes": max(5, min(240, minutes)),
+                        "rationale": "Updated existing task instead of adding a duplicate",
+                    }
+                ]
+                day = draft.get("day") or draft.get("due")
+                if day in ("today", "tomorrow"):
+                    actions.append(
+                        {
+                            "type": "move",
+                            "task_id": matched_id,
+                            "day": day,
+                            "rationale": f"Moved to {day} as requested",
+                        }
+                    )
+                return {
+                    "intent": "act",
+                    "tasks": [],
+                    "actions": actions,
+                    "breakdown": f'Updated "{matched_title}" instead of adding a duplicate.',
+                }
+            if re.search(r"\b(add|separate|separately|keep both|both|another|new one)\b", ans):
+                return {
+                    "intent": "plan",
+                    "tasks": [draft],
+                    "actions": [],
+                    "breakdown": f'Added "{draft.get("title", "task")}" separately.',
+                }
+            # Unclear answer: ask again
+            return {
+                "intent": "clarify",
+                "tasks": [],
+                "actions": [],
+                "breakdown": f'I can merge it with "{matched_title}" or add it separately. Which would you prefer?',
+                "clarify_state": clarify_state,
+            }
         orig = clarify_state["original_request"]
         text_clean = f"{orig}. {text_clean}"
 
@@ -608,10 +655,9 @@ def breakdown(text: str, context: dict | None = None) -> dict:
         task_name = task_title(title_source)
 
         # Check duplicate against existing
-        is_duplicate = False
         matched_exist = _find_matching_task(task_name, existing_tasks)
-        if matched_exist:
-            is_duplicate = True
+        match_score = fuzzy_similarity(task_name, matched_exist.get("title", "")) if matched_exist else 0.0
+        is_duplicate = bool(matched_exist)
 
         kind = detect_kind(statement)
         minutes = estimate_minutes(statement)
@@ -637,10 +683,37 @@ def breakdown(text: str, context: dict | None = None) -> dict:
             }
         )
 
+    # Actionable duplicate flow: if the user is adding one task that clearly
+    # matches an existing one, ask to merge/update or add separately.
+    if len(tasks) == 1 and existing_tasks:
+        t = tasks[0]
+        matched_exist = _find_matching_task(t["title"], existing_tasks)
+        score = fuzzy_similarity(t["title"], matched_exist.get("title", "")) if matched_exist else 0.0
+        if matched_exist and score >= 0.7:
+            matched_title = matched_exist.get("title", "an existing task")
+            return {
+                "intent": "clarify",
+                "tasks": [],
+                "actions": [],
+                "breakdown": (
+                    f'"{t["title"]}" looks similar to "{matched_title}" already in your plan. '
+                    "Do you want to merge/update the existing task, or add this separately?"
+                ),
+                "clarify_state": {
+                    "original_request": text_clean,
+                    "question": "Merge/update existing task or add separately?",
+                    "matched_task_id": matched_exist.get("id"),
+                    "matched_task_title": matched_title,
+                    "draft_task": t,
+                },
+            }
+
     breakdown_text = (
         f"Offline mode: split your dump into {len(tasks)} startable task"
         f"{'s' if len(tasks) != 1 else ''}."
     )
+    if any(fuzzy_similarity(t["title"], (m.get("title") if (m := _find_matching_task(t["title"], existing_tasks)) else "")) >= 0.55 for t in tasks):
+        breakdown_text += " Some tasks look similar to ones already in your plan — tell me if you want to merge or add separately."
 
     return {
         "intent": "plan",
