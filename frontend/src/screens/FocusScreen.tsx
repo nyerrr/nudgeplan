@@ -200,16 +200,8 @@ export function FocusScreen() {
                   {candidates.map((task) => {
                     const active = task.id === selected.id;
                     return (
-                      <Pressable
+                      <View
                         key={task.id}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
-                        aria-selected={active}
-                        accessibilityLabel={`Focus on ${task.title}`}
-                        onPress={() => {
-                          setFocus(task.id);
-                          setPickerOpen(false);
-                        }}
                         style={[
                           styles.pickerOption,
                           {
@@ -220,46 +212,57 @@ export function FocusScreen() {
                           },
                         ]}
                       >
-                        <View style={styles.taskPickerText}>
-                          <Text
-                            style={{
-                              color: active ? colors.onAccent : colors.ink,
-                              fontFamily: active ? fonts.bold : fonts.medium,
-                              fontSize: 13,
-                            }}
-                            numberOfLines={1}
-                          >
-                            {task.title}
-                          </Text>
-                          <Text
-                            style={{
-                              color: active ? colors.onAccent : colors.muted,
-                              fontFamily: fonts.regular,
-                              fontSize: 11.5,
-                              marginTop: 2,
-                              opacity: 0.8,
-                            }}
-                          >
-                            {fmtDuration(task.dur)} · {task.steps.length} steps
-                          </Text>
-                        </View>
-                        <Icon
-                          name={active ? 'checkmark-circle' : 'ellipse-outline'}
-                          size={18}
-                          color={active ? colors.onAccent : colors.brand}
-                        />
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: active }}
+                          aria-selected={active}
+                          accessibilityLabel={`Focus on ${task.title}`}
+                          onPress={() => {
+                            setFocus(task.id);
+                            setPickerOpen(false);
+                          }}
+                          style={styles.pickerOptionMain}
+                        >
+                          <View style={styles.taskPickerText}>
+                            <Text
+                              style={{
+                                color: active ? colors.onAccent : colors.ink,
+                                fontFamily: active ? fonts.bold : fonts.medium,
+                                fontSize: 13,
+                              }}
+                              numberOfLines={1}
+                            >
+                              {task.title}
+                            </Text>
+                            <Text
+                              style={{
+                                color: active ? colors.onAccent : colors.muted,
+                                fontFamily: fonts.regular,
+                                fontSize: 11.5,
+                                marginTop: 2,
+                                opacity: 0.8,
+                              }}
+                            >
+                              {fmtDuration(task.dur)} · {task.steps.length} steps
+                            </Text>
+                          </View>
+                          <Icon
+                            name={active ? 'checkmark-circle' : 'ellipse-outline'}
+                            size={18}
+                            color={active ? colors.onAccent : colors.brand}
+                          />
+                        </Pressable>
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel={`Delete ${task.title}`}
-                          onPress={(event) => {
-                            event.stopPropagation();
+                          onPress={() => {
                             confirmDelete(task.id, task.title);
                           }}
                           style={styles.pickerDelete}
                         >
                           <Icon name="trash-outline" size={17} color={colors.warn} />
                         </Pressable>
-                      </Pressable>
+                      </View>
                     );
                   })}
                 </View>
@@ -664,11 +667,17 @@ const styles = StyleSheet.create({
   pickerOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
     borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 11,
+  },
+  pickerOptionMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minWidth: 0,
   },
   spread: {
     flexDirection: 'row',
