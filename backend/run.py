@@ -34,18 +34,27 @@ def _is_loopback(host: str) -> bool:
     return host in {"127.0.0.1", "::1", "localhost"}
 
 
+MIN_API_TOKEN_LENGTH = 24
+
+
 def main() -> int:
     reload_flag = "--reload" in sys.argv
 
-    if not _is_loopback(HOST) and not API_AUTH_TOKEN and not (
-        SUPABASE_URL and SUPABASE_ANON_KEY and AUTH_REQUIRED
-    ):
-        print(
-            "[ERROR] HOST is not loopback, but no authentication is configured. "
-            "Set SUPABASE_URL/SUPABASE_ANON_KEY with AUTH_REQUIRED=true "
-            "(recommended), or a strong API_AUTH_TOKEN."
-        )
-        return 1
+    supabase_ready = bool(SUPABASE_URL and SUPABASE_ANON_KEY and AUTH_REQUIRED)
+    if not _is_loopback(HOST) and not supabase_ready:
+        if not API_AUTH_TOKEN:
+            print(
+                "[ERROR] HOST is not loopback, but no authentication is configured. "
+                "Set SUPABASE_URL/SUPABASE_ANON_KEY with AUTH_REQUIRED=true "
+                "(recommended), or a strong API_AUTH_TOKEN."
+            )
+            return 1
+        if len(API_AUTH_TOKEN) < MIN_API_TOKEN_LENGTH:
+            print(
+                f"[ERROR] API_AUTH_TOKEN must be at least {MIN_API_TOKEN_LENGTH} "
+                "characters for a non-loopback bind."
+            )
+            return 1
 
     print(f"[INFO] NudgePlan API on http://{HOST}:{PORT}")
     print("[INFO] Docs at http://{0}:{1}/docs".format(HOST, PORT))

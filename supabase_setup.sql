@@ -96,3 +96,23 @@ create index if not exists steps_task_id_idx on public.steps (task_id);
 create index if not exists history_user_created_idx on public.history (user_id, created_at desc);
 create index if not exists daily_stats_user_date_idx on public.daily_stats (user_id, date desc);
 create index if not exists checkins_user_created_idx on public.checkins (user_id, created_at desc);
+
+-- Step 6: the trigger function only runs from the auth.users trigger. Remove
+-- the default PUBLIC execute grant so it cannot be called through the API.
+revoke all on function public.handle_new_user() from public;
+revoke all on function public.handle_new_user() from anon, authenticated;
+
+-- Step 7: verification. Every row must show relrowsecurity = true.
+-- Run this after the statements above and fix anything that is false.
+select relname, relrowsecurity
+from pg_class
+where relnamespace = 'public'::regnamespace
+  and relname in (
+    'profiles',
+    'tasks',
+    'steps',
+    'history',
+    'daily_stats',
+    'checkins'
+  )
+order by relname;

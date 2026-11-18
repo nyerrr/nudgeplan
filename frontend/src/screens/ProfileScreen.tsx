@@ -625,7 +625,7 @@ export function ProfileScreen() {
             onPress={() =>
               Alert.alert(
                 'Delete all data',
-                'This removes all tasks, history, and settings from this device. This cannot be undone.',
+                'This removes all tasks, history, and settings from this device, and deletes your synced rows from your account. This cannot be undone.',
                 [
                   { text: 'Cancel', style: 'cancel' },
                   {

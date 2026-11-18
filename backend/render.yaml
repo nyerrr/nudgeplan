@@ -5,10 +5,12 @@ services:
     plan: free
     region: singapore
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    startCommand: python run.py
     healthCheckPath: /health
     autoDeploy: true
     envVars:
+      - key: HOST
+        value: "0.0.0.0"
       - key: GEMINI_API_KEY
         sync: false
       - key: SUPABASE_URL

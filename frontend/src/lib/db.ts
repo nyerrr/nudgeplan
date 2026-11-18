@@ -123,6 +123,17 @@ export async function deleteAllTasksRemote(userId: string) {
   if (tasksError) throw tasksError;
 }
 
+/** Remove every synced row for an account (the auth user itself is kept). */
+export async function deleteAllUserDataRemote(userId: string) {
+  if (!supabase) return;
+  await supabase.from('steps').delete().eq('user_id', userId);
+  await supabase.from('tasks').delete().eq('user_id', userId);
+  await supabase.from('history').delete().eq('user_id', userId);
+  await supabase.from('daily_stats').delete().eq('user_id', userId);
+  await supabase.from('checkins').delete().eq('user_id', userId);
+  await supabase.from('profiles').delete().eq('id', userId);
+}
+
 type RemoteData = Awaited<ReturnType<typeof fetchRemoteState>>;
 
 export function reconstructFromRemote(remote: RemoteData, baseState: AppState): AppState | null {

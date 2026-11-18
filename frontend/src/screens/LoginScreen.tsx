@@ -399,7 +399,8 @@ export function LoginScreen() {
           ) : null}
 
           <Text style={[styles.foot, { color: colors.muted }]}>
-            Your plan stays on this device until you enable cloud sync.
+            Guest plans stay on this device. Signed-in plans sync to your private
+            Supabase account.
           </Text>
         </View>
       </ScrollView>

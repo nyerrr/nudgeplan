@@ -12,11 +12,14 @@ generation degrades into something usable instead of breaking the UI.
 import asyncio
 import json
 import os
+import posixpath
 import re
 import secrets
+import sys
 import time
 from datetime import date, timedelta
 from typing import Literal
+from urllib.parse import unquote
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -26,10 +29,13 @@ from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-import auth as supabase_auth
-import planner
-
+# auth.py reads SUPABASE_* at import time. Load .env first, otherwise starting
+# with `uvicorn main:app` silently disables authentication even though the
+# project is configured in backend/.env.
 load_dotenv()
+
+import auth as supabase_auth  # noqa: E402
+import planner  # noqa: E402
 
 _TRUTHY = {"1", "true", "yes", "on"}
 
@@ -56,6 +62,48 @@ for origin in configured_origins:
 api_auth_token = os.getenv("API_AUTH_TOKEN", "").strip()
 supabase_auth_enabled = supabase_auth.auth_enabled()
 
+
+def _bound_host() -> str:
+    """Best-effort read of the address this process will bind to.
+
+    ``uvicorn main:app --host 0.0.0.0`` does not set the HOST environment
+    variable, so the command line is checked as well. This keeps the startup
+    guard effective even when run.py is bypassed.
+    """
+    host = os.getenv("HOST", "127.0.0.1").strip() or "127.0.0.1"
+    argv = sys.argv
+    for index, arg in enumerate(argv):
+        if arg == "--host" and index + 1 < len(argv):
+            host = argv[index + 1]
+        elif arg.startswith("--host="):
+            host = arg.split("=", 1)[1]
+    return host
+
+
+MIN_API_TOKEN_LENGTH = 24
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+_bound_host = _bound_host()
+
+if (
+    api_auth_token
+    and not supabase_auth_enabled
+    and len(api_auth_token) < MIN_API_TOKEN_LENGTH
+):
+    raise RuntimeError(
+        f"API_AUTH_TOKEN must be at least {MIN_API_TOKEN_LENGTH} characters."
+    )
+
+if (
+    _bound_host not in _LOOPBACK_HOSTS
+    and not supabase_auth_enabled
+    and not api_auth_token
+):
+    raise RuntimeError(
+        f"Refusing to start on HOST={_bound_host!r}: no authentication is "
+        "configured. Set SUPABASE_URL and AUTH_REQUIRED=true (recommended), "
+        "or a strong API_AUTH_TOKEN."
+    )
+
 # Keep the interactive docs available while developing locally. Once Supabase
 # auth is enabled (production), hide them unless explicitly requested.
 _docs_setting = os.getenv("ENABLE_DOCS")
@@ -74,11 +122,28 @@ app = FastAPI(
     openapi_url="/openapi.json" if docs_enabled else None,
 )
 
-# Only the AI endpoints cost money, so only they are gated. `/` and `/health`
-# stay public so uptime checks and the in-app status badge keep working.
-PROTECTED_PREFIXES = ("/ai/", "/plan/")
+# Fail closed: only the health/root probes and the optional docs are public.
+# Matching protected prefixes is fragile because an encoded or dot-segment path
+# can dodge a prefix check, so the small set of public paths is listed instead.
+PUBLIC_PATHS = frozenset({"/", "/health"})
+DOCS_PREFIXES = ("/docs", "/redoc", "/openapi.json")
+
+
+def _normalise_path(path: str) -> str:
+    """Decode and normalise a request path before the auth decision."""
+    decoded = unquote(path).replace("\\", "/")
+    normalised = posixpath.normpath(decoded or "/")
+    return normalised if normalised.startswith("/") else "/" + normalised
+
+
+def _is_public_path(path: str) -> bool:
+    return path in PUBLIC_PATHS or path.startswith(DOCS_PREFIXES)
+
 
 AI_RATE_LIMIT = _env_int("AI_RATE_LIMIT", 30, 0)
+# A second, looser bucket per IP means creating extra accounts does not grant
+# unlimited AI calls from one machine.
+AI_IP_RATE_LIMIT = _env_int("AI_IP_RATE_LIMIT", AI_RATE_LIMIT * 5, 0)
 AI_RATE_WINDOW_SECONDS = _env_int("AI_RATE_WINDOW_SECONDS", 60, 1)
 MAX_REQUEST_BYTES = _env_int("MAX_REQUEST_BYTES", 65_536, 1_024)
 _rate_lock = asyncio.Lock()
@@ -125,9 +190,9 @@ async def _authenticate(request: Request) -> JSONResponse | None:
     return None
 
 
-async def _rate_limited(subject: str) -> bool:
+async def _rate_limited(subject: str, limit: int) -> bool:
     """Small in-process guard against accidental loops and API-cost abuse."""
-    if AI_RATE_LIMIT <= 0:
+    if limit <= 0:
         return False
 
     now = time.monotonic()
@@ -139,7 +204,7 @@ async def _rate_limited(subject: str) -> bool:
             _rate_hits[subject] = hits
         while hits and hits[0] <= cutoff:
             hits.pop(0)
-        if len(hits) >= AI_RATE_LIMIT:
+        if len(hits) >= limit:
             return True
         hits.append(now)
 
@@ -182,14 +247,26 @@ def _with_security_headers(response, request: Request):
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        is_protected = request.url.path.startswith(PROTECTED_PREFIXES)
-        if request.method != "OPTIONS" and is_protected:
+        path = _normalise_path(request.url.path)
+        is_protected = request.method != "OPTIONS" and not _is_public_path(path)
+
+        if is_protected:
             content_length = request.headers.get("content-length")
-            if content_length:
+            if content_length is None and request.method in {"POST", "PUT", "PATCH"}:
+                # Reject chunked bodies: a missing length would otherwise let a
+                # client stream past MAX_REQUEST_BYTES into memory.
+                return _with_security_headers(
+                    JSONResponse(
+                        {"detail": "Content-Length is required."},
+                        status_code=411,
+                    ),
+                    request,
+                )
+            if content_length is not None:
                 try:
                     too_large = int(content_length) > MAX_REQUEST_BYTES
                 except ValueError:
-                    too_large = False
+                    too_large = True
                 if too_large:
                     return _with_security_headers(
                         JSONResponse(
@@ -203,10 +280,19 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             if rejection is not None:
                 return _with_security_headers(rejection, request)
 
-            subject = getattr(request.state, "user_id", None) or (
-                f"ip:{request.client.host}" if request.client else "ip:unknown"
-            )
-            if await _rate_limited(subject):
+            client_ip = request.client.host if request.client else "unknown"
+            if await _rate_limited(f"ip:{client_ip}", AI_IP_RATE_LIMIT):
+                return _with_security_headers(
+                    JSONResponse(
+                        {"detail": "Too many AI requests. Try again shortly."},
+                        status_code=429,
+                        headers={"Retry-After": str(AI_RATE_WINDOW_SECONDS)},
+                    ),
+                    request,
+                )
+
+            user_id = getattr(request.state, "user_id", None)
+            if user_id and await _rate_limited(f"user:{user_id}", AI_RATE_LIMIT):
                 return _with_security_headers(
                     JSONResponse(
                         {"detail": "Too many AI requests. Try again shortly."},
@@ -453,12 +539,14 @@ async def plan_tasks(req: PlanRequest):
 
     raw, used_model, errors = _generate_with_fallback(build_prompt(req.text))
     if raw is None:
+        # Keep upstream error text (model names, quota details) in the server
+        # log instead of returning it to the caller.
+        print("[ERROR] All Gemini models failed: " + "; ".join(errors))
         raise HTTPException(
             status_code=502,
             detail=(
-                "All Gemini models failed. "
-                + "; ".join(errors)
-                + ". Check GEMINI_API_KEY and GEMINI_MODEL in backend/.env."
+                "The AI planner is unavailable right now. Try again shortly, "
+                "or keep using the offline planner."
             ),
         )
 

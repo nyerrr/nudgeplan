@@ -15,6 +15,11 @@ import time
 from urllib.parse import urlparse
 
 import httpx
+from dotenv import load_dotenv
+
+# Keep this module safe to import on its own (tests, scripts). main.py also
+# loads .env before importing this module.
+load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()

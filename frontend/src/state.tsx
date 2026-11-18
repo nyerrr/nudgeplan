@@ -12,7 +12,7 @@ import { AppState as NativeAppState, useColorScheme } from 'react-native';
 import { useAuth } from './auth';
 import { checkBackend, requestCheckIn, requestSteps } from './lib/api';
 import {
-  deleteAllTasksRemote,
+  deleteAllUserDataRemote,
   deleteTaskRemote,
   fetchRemoteState,
   reconstructFromRemote,
@@ -379,7 +379,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
             pendingDeletes.current.set(userId, queuedDeletes);
             for (const taskId of queuedDeletes) {
-              if (taskId === '*') await deleteAllTasksRemote(userId);
+              if (taskId === '*') await deleteAllUserDataRemote(userId);
               else await deleteTaskRemote(userId, taskId);
               queuedDeletes.delete(taskId);
               await clearPendingDelete(userId, taskId);

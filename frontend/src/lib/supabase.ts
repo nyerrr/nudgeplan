@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { Platform } from 'react-native';
 
 /**
  * Supabase client. Created only when both env vars are present, so the app
@@ -46,7 +45,11 @@ export const supabase: SupabaseClient | null = SUPABASE_CONFIGURED
         // the web callback explicitly there so failures are visible instead
         // of silently dropping the user back on the login screen.
         detectSessionInUrl: false,
-        flowType: Platform.OS === 'web' ? 'pkce' : 'implicit',
+        // PKCE on every platform. The implicit flow returns tokens directly in
+        // the callback URL, which any app that registers the nudgeplan://
+        // scheme could replay. PKCE binds the callback to the verifier this
+        // client generated, so a replayed code cannot create a session.
+        flowType: 'pkce',
       },
     })
   : null;

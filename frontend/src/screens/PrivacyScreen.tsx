@@ -8,11 +8,15 @@ import { fonts, type } from '../theme';
 const SECTIONS: Array<{ title: string; body: string }> = [
   {
     title: 'What stays on your device',
-    body: 'Your name, working hours, tasks, focus steps, check-ins, and completion history are stored in this app on this device. You can use NudgePlan without an account. If you sign in, your sign-in session is also stored on this device; your plan is not uploaded to a cloud database yet.',
+    body: 'Your name, working hours, tasks, focus steps, check-ins, and completion history are cached in this app on this device. You can use NudgePlan without an account. Guest plans stay on the device and are not uploaded.',
+  },
+  {
+    title: 'Cloud sync',
+    body: 'If you sign in with Google or email, your tasks, focus steps, and profile preferences sync to your private Supabase account so they follow you to other devices. Row Level Security in the database keeps every account\'s rows private. Your sign-in session is stored on this device.',
   },
   {
     title: 'When text leaves the device',
-    body: 'If you connect the optional NudgePlan AI service, the text of a check-in is sent to that service to improve task parsing. You can use the entire app without it; the on-device planner runs first and is always available. The service does not store your check-ins.',
+    body: 'If the optional NudgePlan AI service is connected, the text of a check-in or task title is sent to that service and to Google Gemini to parse it into tasks. NudgePlan does not store your check-ins; Google processes them under its API terms. The entire app still works with the on-device planner.',
   },
   {
     title: 'Voice input',
@@ -24,7 +28,7 @@ const SECTIONS: Array<{ title: string; body: string }> = [
   },
   {
     title: 'Your controls',
-    body: 'Profile lets you export a copy of your data as JSON, or delete everything. Deleting data removes the local database, cancels scheduled reminders, and returns the app to its first-run state.',
+    body: 'Profile lets you export a copy of your data as JSON, reset preferences, or delete all data. Deleting data removes the local database, cancels scheduled reminders, and deletes your synced tasks, steps, history, check-ins, and profile preferences from Supabase. Your Supabase sign-in account itself is not deleted; sign out or contact support to remove the account.',
   },
   {
     title: 'Analytics and ads',

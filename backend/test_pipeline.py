@@ -8,11 +8,19 @@ Usage:
 """
 
 import json
+import os
 import sys
 from datetime import date, timedelta
 from types import SimpleNamespace
 
-import main
+# These tests call the routes without a Supabase session. Clear the project's
+# Supabase configuration before main.py loads backend/.env so the auth guard
+# stays off for the offline test run.
+os.environ["SUPABASE_URL"] = ""
+os.environ["SUPABASE_ANON_KEY"] = ""
+os.environ["AUTH_REQUIRED"] = "false"
+
+import main  # noqa: E402
 
 
 class FakeModels:
