@@ -128,17 +128,49 @@ function toSteps(input: unknown): ParsedStep[] {
   return steps;
 }
 
+export interface CheckInContext {
+  /** Recent turns only; the backend also caps these. */
+  history?: Array<{ from: 'me' | 'bot'; text: string }>;
+  /** A compact view of the current plan, not the whole state. */
+  tasks?: Array<{
+    title: string;
+    dur: number;
+    day: string;
+    pri: number;
+    dueDate?: string | null;
+  }>;
+  plannedMinutes?: number;
+  /** The user's local ISO date/time, so relative dates use their clock. */
+  nowIso?: string;
+  timezone?: string;
+}
+
 export async function requestCheckIn(
   text: string,
   energy: Energy,
   startH: number,
   endH: number,
+  context?: CheckInContext,
 ): Promise<CheckInApiResponse | null> {
   const data = await postJson<CheckInApiResponse>('/plan/checkin', {
     text,
     energy,
     start_h: startH,
     end_h: endH,
+    history: context?.history?.slice(-6).map((turn) => ({
+      from: turn.from,
+      text: turn.text.slice(0, 400),
+    })),
+    tasks: context?.tasks?.slice(0, 12).map((task) => ({
+      title: task.title.slice(0, 80),
+      dur: task.dur,
+      day: task.day,
+      pri: task.pri,
+      dueDate: task.dueDate ?? null,
+    })),
+    planned_minutes: context?.plannedMinutes ?? 0,
+    now: context?.nowIso,
+    timezone: context?.timezone,
   });
   if (!data || !Array.isArray(data.items)) return null;
   // An empty plan can still carry a useful energy reading or reply. Only fall

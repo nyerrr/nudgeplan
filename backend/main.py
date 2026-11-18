@@ -19,7 +19,7 @@ import re
 import secrets
 import sys
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Literal
 from urllib.parse import unquote
 
@@ -356,8 +356,17 @@ MODEL_FALLBACKS = [
     if m.strip()
 ]
 
+# A model that times out is skipped briefly, so a bad upstream does not add its
+# timeout to every check-in while it recovers.
+_model_cooldown_until: dict[str, float] = {}
+
 # Bound every upstream call so a slow model cannot block the whole event loop.
-GEMINI_TIMEOUT_SECONDS = _env_int("GEMINI_TIMEOUT_SECONDS", 30, 1)
+# A request may try several models, but never for longer than the client will
+# wait. A model that times out is skipped briefly instead of stalling every
+# subsequent check-in.
+GEMINI_TIMEOUT_SECONDS = _env_int("GEMINI_TIMEOUT_SECONDS", 15, 1)
+GEMINI_TOTAL_TIMEOUT_SECONDS = _env_int("GEMINI_TOTAL_TIMEOUT_SECONDS", 40, 5)
+MODEL_COOLDOWN_SECONDS = _env_int("MODEL_COOLDOWN_SECONDS", 120, 0)
 GEMINI_MAX_OUTPUT_TOKENS = _env_int("GEMINI_MAX_OUTPUT_TOKENS", 2048, 256)
 
 # Port 8001 by default. Port 8000 is probed by local AI tooling (opencode,
@@ -487,12 +496,37 @@ class TaskOut(BaseModel):
     dueDate: str | None = None
 
 
+class CheckInTurn(BaseModel):
+    """One recent chat turn, used only to resolve references like "that one"."""
+
+    from_: Literal["me", "bot"] = Field(..., alias="from")
+    text: str = Field(..., max_length=600)
+
+
+class ExistingTask(BaseModel):
+    """A compact view of something already in the plan."""
+
+    title: str = Field(..., max_length=120)
+    dur: int = Field(45, ge=0, le=480)
+    day: Literal["today", "tomorrow"] = "today"
+    pri: int = Field(2, ge=1, le=3)
+    dueDate: str | None = Field(None, max_length=10)
+
+
 class CheckInRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=12_000)
     # None means "infer from the dump". An explicit UI selection wins.
     energy: Energy | None = None
     start_h: int = Field(9, ge=0, le=23)
     end_h: int = Field(18, ge=1, le=24)
+    # Bounded context. These fields are optional so older clients keep working.
+    history: list[CheckInTurn] = Field(default_factory=list, max_length=8)
+    tasks: list[ExistingTask] = Field(default_factory=list, max_length=20)
+    planned_minutes: int = Field(0, ge=0, le=24 * 60)
+    now: str | None = Field(
+        None, max_length=40, description="The user's local ISO date/time."
+    )
+    timezone: str | None = Field(None, max_length=64)
 
     @field_validator("text")
     @classmethod
@@ -662,20 +696,22 @@ async def plan_checkin(req: CheckInRequest):
     response is then converted to the app's task shape, including an ISO
     ``dueDate`` so a future exam or deadline is never silently dropped.
     """
+    today, now_time = _client_now(req)
     if MOCK or not HAS_REAL_KEY:
-        tasks, breakdown = _normalise_plan(planner.breakdown(req.text))
-        return _checkin_response(req, tasks, breakdown, "offline", None)
+        tasks, breakdown = _normalise_plan(planner.breakdown(req.text), today)
+        return _checkin_response(req, tasks, breakdown, "offline", None, today)
 
+    context = _checkin_context(req, now_time)
     raw, used_model, errors = await _generate_with_fallback(
-        build_checkin_prompt(req.text, req.start_h, req.end_h)
+        build_checkin_prompt(req.text, req.start_h, req.end_h, context, today)
     )
     if raw is None:
         logger.warning("All Gemini models failed for /plan/checkin: %s", "; ".join(errors))
-        tasks, breakdown = _normalise_plan(planner.breakdown(req.text))
-        return _checkin_response(req, tasks, breakdown, "offline", None)
+        tasks, breakdown = _normalise_plan(planner.breakdown(req.text), today)
+        return _checkin_response(req, tasks, breakdown, "offline", None, today)
 
-    tasks, breakdown = _normalise_plan(_parse_json(raw))
-    return _checkin_response(req, tasks, breakdown, "gemini", used_model)
+    tasks, breakdown = _normalise_plan(_parse_json(raw), today)
+    return _checkin_response(req, tasks, breakdown, "gemini", used_model, today)
 
 
 @app.post("/plan/steps", response_model=StepsResponse)
@@ -725,6 +761,8 @@ dumped everything on their mind.
 Today is {weekday}, {today}. Their work window is {start_h}:00 to {end_h}:00. \
 Resolve relative dates ("Friday", "next week", "Nov 5") against today, and never \
 return a date in the past.
+
+{context}
 
 Turn the dump into 2 to {max_tasks} concrete tasks. Rules:
 
@@ -809,18 +847,72 @@ def build_prompt(text: str) -> str:
     )
 
 
-def build_checkin_prompt(text: str, start_h: int, end_h: int) -> str:
-    today = date.today()
+def build_checkin_prompt(
+    text: str,
+    start_h: int,
+    end_h: int,
+    context: str = "",
+    today: date | None = None,
+) -> str:
+    today = today or date.today()
     return CHECKIN_PROMPT_TEMPLATE.format(
         today=today.isoformat(),
         weekday=today.strftime("%A"),
         start_h=start_h,
         end_h=end_h,
+        context=context,
         max_tasks=MAX_TASKS,
         min_minutes=MIN_MINUTES,
         max_minutes=MAX_MINUTES,
         text=text,
     )
+
+
+def _client_now(req: CheckInRequest) -> tuple[date, str | None]:
+    """Read the user's local date/time without trusting the server timezone."""
+    if not req.now:
+        return date.today(), None
+    try:
+        parsed = datetime.fromisoformat(req.now.replace("Z", "+00:00"))
+    except ValueError:
+        return date.today(), None
+    return parsed.date(), parsed.strftime("%H:%M")
+
+
+def _checkin_context(req: CheckInRequest, now_time: str | None) -> str:
+    """Build a small, bounded context block for the check-in prompt."""
+    lines: list[str] = []
+    if req.energy:
+        lines.append(
+            f"The user currently reports {req.energy} energy. "
+            "For low energy, prefer smaller tasks and 2-10 minute steps."
+        )
+    if req.planned_minutes:
+        lines.append(
+            f"{req.planned_minutes} minutes of today's window are already planned."
+        )
+    if req.tasks:
+        existing = "; ".join(
+            f"{task.title[:80]} ({task.dur}m, {task.day})"
+            for task in req.tasks[:10]
+        )
+        lines.append(
+            "Existing tasks (do not duplicate these; leave room for them): "
+            f"{existing}."
+        )
+    if req.history:
+        turns = " | ".join(
+            f"{'User' if turn.from_ == 'me' else 'Assistant'}: {turn.text[:240]}"
+            for turn in req.history[-6:]
+        )
+        lines.append(f"Recent conversation: {turns}")
+    if now_time:
+        zone = f" ({req.timezone})" if req.timezone else ""
+        lines.append(
+            f"The user's local time is {now_time}{zone}. "
+            "Never set a fixed start time that has already passed."
+        )
+    return "\n".join(lines)
 
 
 def build_steps_prompt(title: str, effort: str, dur: int) -> str:
@@ -831,13 +923,17 @@ def build_steps_prompt(title: str, effort: str, dur: int) -> str:
     )
 
 
-async def _generate_once(prompt: str, schema: type[BaseModel], model: str) -> str:
+async def _generate_once(
+    prompt: str, schema: type[BaseModel], model: str, timeout: float | None = None
+) -> str:
     """Call one model without blocking the event loop."""
     config = {
         "response_mime_type": "application/json",
         "response_schema": schema,
         "max_output_tokens": GEMINI_MAX_OUTPUT_TOKENS,
-        "http_options": genai_types.HttpOptions(timeout=GEMINI_TIMEOUT_SECONDS),
+        "http_options": genai_types.HttpOptions(
+            timeout=timeout if timeout is not None else GEMINI_TIMEOUT_SECONDS
+        ),
     }
     aio_models = getattr(getattr(client, "aio", None), "models", None)
     if aio_models is not None:
@@ -854,19 +950,48 @@ async def _generate_once(prompt: str, schema: type[BaseModel], model: str) -> st
     return response.text or ""
 
 
+def _is_timeout_error(exc: Exception) -> bool:
+    """A timed-out model is worth cooling down; a fast 4xx/5xx is not."""
+    return isinstance(exc, TimeoutError) or "timeout" in exc.__class__.__name__.lower()
+
+
 async def _generate_with_fallback(
     prompt: str, schema: type[BaseModel] = PlanPayload
 ) -> tuple[str | None, str | None, list[str]]:
-    """Try each model in turn, returning (text, model_used, errors)."""
+    """Try each model in turn, respecting one total request budget."""
     errors: list[str] = []
+    deadline = time.monotonic() + GEMINI_TOTAL_TIMEOUT_SECONDS
     for model in [MODEL_NAME, *MODEL_FALLBACKS]:
+        now = time.monotonic()
+        if _model_cooldown_until.get(model, 0.0) > now:
+            errors.append(f"{model}: cooling down")
+            continue
+        remaining = deadline - now
+        if remaining <= 0:
+            errors.append("total timeout reached")
+            break
+        attempt_timeout = min(float(GEMINI_TIMEOUT_SECONDS), remaining)
         try:
-            text = await _generate_once(prompt, schema, model)
+            text = await asyncio.wait_for(
+                _generate_once(prompt, schema, model, attempt_timeout),
+                timeout=attempt_timeout + 1.0,
+            )
             if text.strip():
+                _model_cooldown_until.pop(model, None)
                 return text, model, errors
             errors.append(f"{model}: empty response")
+        except asyncio.TimeoutError:
+            errors.append(f"{model}: timeout")
+            if MODEL_COOLDOWN_SECONDS:
+                _model_cooldown_until[model] = (
+                    time.monotonic() + MODEL_COOLDOWN_SECONDS
+                )
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{model}: {_short_error(exc)}")
+            if _is_timeout_error(exc) and MODEL_COOLDOWN_SECONDS:
+                _model_cooldown_until[model] = (
+                    time.monotonic() + MODEL_COOLDOWN_SECONDS
+                )
     return None, None, errors
 
 
@@ -898,8 +1023,11 @@ def _parse_json(text: str) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def _normalise_plan(parsed: dict) -> tuple[list[PlannedTask], str]:
+def _normalise_plan(
+    parsed: dict, today: date | None = None
+) -> tuple[list[PlannedTask], str]:
     """Apply the Micro-Step Guard to whatever the model produced."""
+    today = today or date.today()
     raw_tasks = parsed.get("tasks")
     if isinstance(raw_tasks, str):
         raw_tasks = [raw_tasks]
@@ -908,7 +1036,7 @@ def _normalise_plan(parsed: dict) -> tuple[list[PlannedTask], str]:
 
     tasks: list[PlannedTask] = []
     for entry in raw_tasks:
-        task = _normalise_task(entry)
+        task = _normalise_task(entry, today)
         if task is not None:
             tasks.append(task)
         if len(tasks) >= MAX_TASKS:
@@ -922,7 +1050,7 @@ def _normalise_plan(parsed: dict) -> tuple[list[PlannedTask], str]:
     return tasks, breakdown
 
 
-def _normalise_task(entry: object) -> PlannedTask | None:
+def _normalise_task(entry: object, today: date | None = None) -> PlannedTask | None:
     if isinstance(entry, str):
         entry = {"title": entry}
     if not isinstance(entry, dict):
@@ -948,7 +1076,7 @@ def _normalise_task(entry: object) -> PlannedTask | None:
         minutes=_coerce_minutes(entry.get("minutes")),
         energy=_coerce_level(entry.get("energy"), "medium"),
         priority=_coerce_level(entry.get("priority"), "medium"),
-        due=_coerce_due(entry.get("due")),
+        due=_coerce_due(entry.get("due"), today),
         start=_coerce_start(start_value),
         steps=steps,
     )
@@ -987,7 +1115,7 @@ def _coerce_level(value: object, default: str) -> str:
     return aliases.get(text, default)
 
 
-def _coerce_due(value: object) -> str | None:
+def _coerce_due(value: object, today: date | None = None) -> str | None:
     if value is None:
         return None
     text = " ".join(str(value).split()).lower()
@@ -1000,7 +1128,7 @@ def _coerce_due(value: object) -> str | None:
             parsed = date.fromisoformat(text)
         except ValueError:
             return None
-        today = date.today()
+        today = today or date.today()
         if parsed < today or parsed > today + timedelta(days=MAX_DUE_DAYS):
             return None
         return text
@@ -1107,10 +1235,10 @@ def _clock_to_minutes(value: str | None) -> int | None:
     return hour * 60 + minute
 
 
-def _due_to_iso(due: str | None) -> str | None:
+def _due_to_iso(due: str | None, today: date | None = None) -> str | None:
     if due is None:
         return None
-    today = date.today()
+    today = today or date.today()
     if due == "today":
         return today.isoformat()
     if due == "tomorrow":
@@ -1278,9 +1406,10 @@ def _normalise_steps(parsed: dict, title: str, dur: int) -> list[StepOut]:
     return items
 
 
-def _task_out(task: PlannedTask) -> TaskOut:
-    due = _due_to_iso(task.due)
-    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+def _task_out(task: PlannedTask, today: date | None = None) -> TaskOut:
+    today = today or date.today()
+    due = _due_to_iso(task.due, today)
+    tomorrow = (today + timedelta(days=1)).isoformat()
     # ``day`` already carries today/tomorrow scheduling. A real deadline badge
     # is only useful for dates beyond that immediate window.
     due_date = due if due and due > tomorrow else None
@@ -1307,8 +1436,9 @@ def _checkin_response(
     breakdown: str,
     source: Literal["gemini", "offline"],
     model: str | None,
+    today: date | None = None,
 ) -> CheckInResponse:
-    items = [_task_out(task) for task in tasks]
+    items = [_task_out(task, today) for task in tasks]
     return CheckInResponse(
         items=items,
         energy=req.energy or _detect_energy(req.text),

@@ -1048,6 +1048,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       try {
         const snapshotState = stateRef.current;
+        const now = new Date();
+        const pad = (value: number) => String(value).padStart(2, '0');
+        const nowIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        const recent = snapshotState.chat
+          .slice(-6)
+          .map((message) => ({ from: message.from, text: message.text }));
+        const planTasks = snapshotState.tasks
+          .filter(
+            (task) =>
+              !task.done && (task.day === 'today' || task.day === 'tomorrow'),
+          )
+          .slice(0, 12)
+          .map((task) => ({
+            title: task.title,
+            dur: task.dur,
+            day: task.day,
+            pri: task.pri,
+            dueDate: task.dueDate,
+          }));
+        const plannedMinutes = snapshotState.tasks
+          .filter((task) => !task.done && task.day === 'today')
+          .reduce((total, task) => total + task.dur, 0);
         let response = null;
         try {
           response = await requestCheckIn(
@@ -1055,6 +1077,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             snapshotState.energy,
             snapshotState.startH,
             snapshotState.endH,
+            {
+              history: recent,
+              tasks: planTasks,
+              plannedMinutes,
+              nowIso,
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            },
           );
         } catch {
           response = null;
