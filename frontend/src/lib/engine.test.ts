@@ -179,7 +179,8 @@ describe('scheduling from the current time', () => {
 
     const planned = planTasks(tasks, 9, 18, 'medium', at(15));
 
-    expect(planned[0].start).toBe(9 * 60);
+    // High-effort work is placed in the highest-energy slot within the full window.
+    expect(planned[0].start).toBe(10 * 60);
   });
 
   it('keeps an evening runway once the saved day end has passed', () => {

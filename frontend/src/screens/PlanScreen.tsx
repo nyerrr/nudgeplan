@@ -168,12 +168,22 @@ export function PlanScreen() {
           <EnergyStrip day={day} />
           <Text style={[type.hint, { color: colors.muted, marginTop: 8, fontFamily: fonts.regular }]}>
             {peaks.length
-              ? `Peak: ${fmtHour(peaks[0])} to ${fmtHour(peaks[peaks.length - 1] + 1)}. `
-              : ''}
+              ? `Peak energy: ${fmtHour(peaks[0])}–${fmtHour(peaks[peaks.length - 1] + 1)}. `
+              : 'Set working hours to see your energy curve. '}
             {highEffort.length
-              ? `${inPeak} of ${highEffort.length} high-effort tasks start in your peak.`
-              : 'No high-effort tasks yet.'}
+              ? `${inPeak}/${highEffort.length} high-effort task${highEffort.length === 1 ? '' : 's'} in peak hours.`
+              : 'No high-effort tasks scheduled yet.'}
           </Text>
+          {highEffort.length > 0 && inPeak < highEffort.length && peaks.length > 0 ? (
+            <Text style={[type.hint, { color: colors.warn, marginTop: 6, fontFamily: fonts.medium }]}>
+              {highEffort.length - inPeak} high-effort task{highEffort.length - inPeak === 1 ? '' : 's'} outside peak hours.
+              Auto-scheduling prefers peak-energy slots when space is available; adjust times or move tasks to rebalance.
+            </Text>
+          ) : highEffort.length > 0 && inPeak === highEffort.length && peaks.length > 0 ? (
+            <Text style={[type.hint, { color: colors.brand, marginTop: 6, fontFamily: fonts.medium }]}>
+              High-effort work is aligned with your peak energy.
+            </Text>
+          ) : null}
         </Card>
       </Section>
     </ScrollView>

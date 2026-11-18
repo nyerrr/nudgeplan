@@ -758,6 +758,18 @@ export function isPeak(
 // Scheduling
 // ---------------------------------------------------------------------------
 
+function slotEnergyFit(task: Task, minute: number, energy: Energy): number {
+  const startHour = Math.floor(minute / 60);
+  const endHour = Math.max(startHour + 1, Math.ceil((minute + task.dur) / 60));
+  let total = 0;
+  let count = 0;
+  for (let hour = startHour; hour < endHour && hour < 24; hour++) {
+    total += energyAt(hour, energy);
+    count += 1;
+  }
+  return count ? total / count : energyAt(startHour, energy);
+}
+
 function findSlot(
   task: Task,
   busy: Array<[number, number]>,
@@ -776,19 +788,28 @@ function findSlot(
   }
   if (!tries.length) return null;
 
-  const peaks = peaksForWindow(from, to, energy);
-  if (task.effort === 'high') {
-    const peakSlot = tries.find((minute) =>
-      peaks.includes(Math.floor(minute / 60)),
-    );
-    if (peakSlot != null) return peakSlot;
-  }
-  if (task.effort === 'low') {
-    const offPeak = tries.find(
-      (minute) => !peaks.includes(Math.floor(minute / 60)),
-    );
-    if (offPeak != null) return offPeak;
-  }
+  const pickBest = (prefer: 'high' | 'low' | 'early'): number => {
+    let best = tries[0];
+    let bestScore = slotEnergyFit(task, best, energy);
+    for (let i = 1; i < tries.length; i++) {
+      const minute = tries[i];
+      const score = slotEnergyFit(task, minute, energy);
+      const better =
+        prefer === 'high'
+          ? score > bestScore
+          : prefer === 'low'
+            ? score < bestScore
+            : false;
+      if (better) {
+        best = minute;
+        bestScore = score;
+      }
+    }
+    return best;
+  };
+
+  if (task.effort === 'high') return pickBest('high');
+  if (task.effort === 'low') return pickBest('low');
   return tries[0];
 }
 
