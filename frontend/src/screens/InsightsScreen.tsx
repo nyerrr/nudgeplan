@@ -4,11 +4,13 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { EnergyStrip } from '../components/EnergyStrip';
 import { Card, Empty, Section, Stat } from '../components/ui';
 import {
+  availableMinutesFor,
   capacityPercent,
   completionRate,
   dailySeries,
   fmtHour,
   peakHours,
+  plannedMinutes,
   streakFromDays,
 } from '../lib/engine';
 import { useApp } from '../state';
@@ -33,9 +35,17 @@ export function InsightsScreen() {
   const peaks = peakHours(state.startH, state.endH, state.energy);
   const streak = streakFromDays(state.checkins);
 
+  const availableToday = availableMinutesFor('today', state.startH, state.endH, state.energy);
+  const plannedToday = plannedMinutes(state.tasks, 'today');
   const tiles = [
     { value: `${done}/${today.length}`, label: 'Done today' },
-    { value: `${capacityPercent(state, 'today')}%`, label: 'Capacity today' },
+    {
+      value:
+        availableToday <= 0 && plannedToday > 0
+          ? 'No time left'
+          : `${capacityPercent(state, 'today')}%`,
+      label: 'Capacity today',
+    },
     { value: String(steps), label: 'Micro-steps finished' },
     {
       value: `${streak} ${streak === 1 ? 'day' : 'days'}`,
@@ -72,12 +82,12 @@ export function InsightsScreen() {
 
       <Section label="At a glance" style={{ marginTop: 18 }}>
         <View style={styles.tiles}>
-          {tiles.map((tile, index) => (
+          {tiles.map((tile) => (
             <Stat
               key={tile.label}
               value={tile.value}
               label={tile.label}
-              tone={index === 0 ? 'accent' : 'default'}
+              tone="default"
             />
           ))}
         </View>

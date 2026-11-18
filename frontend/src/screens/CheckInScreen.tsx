@@ -454,7 +454,7 @@ export function CheckInScreen() {
                   onPress={() => void sendCheckIn(example.prompt)}
                   style={[styles.quickExample, { backgroundColor: colors.surface, borderColor: colors.line }]}
                 >
-                  <Text style={{ color: colors.ink, fontFamily: fonts.medium, fontSize: 12.5 }}>
+                  <Text style={[styles.suggestionChipText, { color: colors.ink }]}>
                     {example.title}
                   </Text>
                 </Pressable>
@@ -527,11 +527,7 @@ export function CheckInScreen() {
         </View>
       ) : null}
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.quickActionsContainer}
-      >
+      <View style={styles.quickActionsContainer}>
         {quickActions.map((qa) => (
           <Pressable
             key={qa.label}
@@ -544,18 +540,12 @@ export function CheckInScreen() {
               { backgroundColor: colors.surface, borderColor: colors.line },
             ]}
           >
-            <Text
-              style={{
-                color: colors.ink,
-                fontFamily: fonts.medium,
-                fontSize: 12,
-              }}
-            >
+            <Text style={[styles.suggestionChipText, { color: colors.ink }]}>
               {qa.label}
             </Text>
           </Pressable>
         ))}
-      </ScrollView>
+      </View>
 
       <View style={[styles.chatbar, { backgroundColor: colors.bg, paddingBottom: Math.max(insets.bottom, 14) }]}>
         <Pressable
@@ -696,16 +686,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 7,
+    alignItems: 'flex-start',
+    gap: 8,
     marginTop: 18,
   },
   quickExample: {
-    minHeight: 44,
+    minHeight: 36,
     borderWidth: 1,
     borderRadius: 999,
     paddingVertical: 8,
     paddingHorizontal: 12,
+    alignSelf: 'flex-start',
     justifyContent: 'center',
+    maxWidth: '100%',
   },
   compactExamples: {
     flexDirection: 'row',
@@ -873,17 +866,26 @@ const styles = StyleSheet.create({
   },
   quickActionsContainer: {
     flexDirection: 'row',
-    gap: 6,
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+    gap: 8,
     paddingHorizontal: 14,
     paddingBottom: 8,
   },
   quickActionChip: {
+    minHeight: 36,
     borderWidth: 1,
     borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 11,
-    minHeight: 32,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start',
     justifyContent: 'center',
+    maxWidth: '100%',
+  },
+  suggestionChipText: {
+    fontFamily: fonts.medium,
+    fontSize: 13,
+    lineHeight: 18,
   },
   retryBtn: {
     flexDirection: 'row',

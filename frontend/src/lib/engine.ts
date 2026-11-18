@@ -664,7 +664,7 @@ export function availableMinutesFor(
   now: Date = new Date(),
 ): number {
   const { from, to } = slotWindow(day, startH, endH, now);
-  return Math.max(15, Math.round((to - from) * ENERGY_FACTOR[energy]));
+  return Math.max(0, Math.round((to - from) * ENERGY_FACTOR[energy]));
 }
 
 export function availableMinutes(
@@ -738,11 +738,10 @@ export function plannedMinutes(tasks: Task[], day: Day): number {
 }
 
 export function capacityPercent(state: AppState, day: Day): number {
-  return Math.round(
-    (plannedMinutes(state.tasks, day) /
-      availableMinutesFor(day, state.startH, state.endH, state.energy)) *
-      100,
-  );
+  const planned = plannedMinutes(state.tasks, day);
+  const available = availableMinutesFor(day, state.startH, state.endH, state.energy);
+  if (available <= 0) return planned > 0 ? 101 : 0;
+  return Math.round((planned / available) * 100);
 }
 
 export function isPeak(
@@ -1020,6 +1019,8 @@ export function movesNeeded(state: AppState): number {
   let planned = plannedMinutes(state.tasks, 'today');
   const available = availableMinutes(state.startH, state.endH, state.energy);
   const candidates = moveCandidates(state.tasks);
+  if (candidates.length === 0) return 0;
+  if (available <= 0) return planned > 0 ? candidates.length : 0;
   let count = 0;
   while (planned > available && count < candidates.length) {
     planned -= candidates[count].dur;
@@ -1041,13 +1042,24 @@ export interface Reality {
 export function realityCheck(state: AppState): Reality {
   const planned = plannedMinutes(state.tasks, 'today');
   const available = availableMinutes(state.startH, state.endH, state.energy);
-  const percent = Math.round((planned / available) * 100);
-  const over = percent > 100;
-  const tight = percent >= 85;
+  const noTimeLeft = available <= 0;
+  const percent = noTimeLeft
+    ? planned > 0
+      ? 101
+      : 0
+    : Math.round((planned / available) * 100);
+  const over = planned > available;
+  const tight = !noTimeLeft && !over && percent >= 85;
   const moves = movesNeeded(state);
 
   let message: string;
-  if (over) {
+  if (noTimeLeft && planned > 0) {
+    message = `No time left today with ${fmtDuration(planned)} still planned. Move ${moves} task${
+      moves > 1 ? 's' : ''
+    } to tomorrow?`;
+  } else if (noTimeLeft) {
+    message = 'No time left in your day today.';
+  } else if (over) {
     message = `Your day is at ${percent}% capacity. Move ${moves} task${
       moves > 1 ? 's' : ''
     }?`;
@@ -1204,11 +1216,14 @@ export function applyCheckIn(
   );
   const plannedById = new Map(tasks.map((task) => [task.id, task]));
   const addedPlanned = added.map((task) => plannedById.get(task.id) ?? task);
-  const pct = Math.round(
-    (plannedMinutes(tasks, 'today') /
-      availableMinutes(state.startH, state.endH, energy)) *
-      100,
-  );
+  const plannedToday = plannedMinutes(tasks, 'today');
+  const availableToday = availableMinutes(state.startH, state.endH, energy);
+  const pct =
+    availableToday <= 0
+      ? plannedToday > 0
+        ? 101
+        : 0
+      : Math.round((plannedToday / availableToday) * 100);
 
   const lines = (parsed.reply || '')
     .split('\n')

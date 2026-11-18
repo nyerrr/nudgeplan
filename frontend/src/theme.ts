@@ -164,9 +164,9 @@ export function elevationStyle(
   return {
     shadowColor: colors.shadow,
     shadowOpacity: 1,
-    shadowRadius: raised ? 20 : 12,
-    shadowOffset: { width: 0, height: raised ? 8 : 3 },
-    elevation: raised ? 6 : 2,
+    shadowRadius: raised ? 14 : 8,
+    shadowOffset: { width: 0, height: raised ? 5 : 2 },
+    elevation: raised ? 4 : 1,
   };
 }
 

@@ -14,7 +14,6 @@ import {
   Button,
   Card,
   Label,
-  Meter,
   Section,
   Segmented,
 } from '../components/ui';
@@ -87,45 +86,43 @@ export function HomeScreen() {
       <View style={styles.head}>
         <View style={styles.headCopy}>
           <Text style={[styles.date, { color: colors.muted }]}>
-            {new Date()
-              .toLocaleDateString('en-US', {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-              })
-              .toUpperCase()}
+            {new Date().toLocaleDateString('en-US', {
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric',
+            })}
           </Text>
-          <Text style={[type.title, styles.greeting, { color: colors.ink }]}>
-            {greeting()}
+          <Text style={styles.greetingLine}>
+            <Text style={[styles.greetingText, { color: colors.ink }]}>
+              {greeting()},{' '}
+            </Text>
+            <Text style={[styles.greetingText, { color: colors.ink }]}>
+              {state.name}
+            </Text>
           </Text>
-          <Text style={[type.title, styles.greetingName, { color: colors.ink }]}>
-            {state.name}
-          </Text>
-          <Text style={[type.sub, { color: colors.muted, marginTop: 2 }]}>
+          <Text style={[styles.greetingSub, { color: colors.muted }]}>
             Let&apos;s shape your day.
           </Text>
         </View>
-        <View style={styles.headActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Profile and settings"
-            onPress={() => go('profile')}
-            style={({ pressed }) => [
-              styles.avatar,
-              { backgroundColor: colors.brand, opacity: pressed ? 0.85 : 1 },
-            ]}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Profile and settings"
+          onPress={() => go('profile')}
+          style={({ pressed }) => [
+            styles.avatar,
+            { backgroundColor: colors.brand, opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <Text
+            style={{
+              color: colors.onBrand,
+              fontFamily: fonts.bold,
+              fontSize: 16,
+            }}
           >
-            <Text
-              style={{
-                color: colors.onBrand,
-                fontFamily: fonts.bold,
-                fontSize: 16,
-              }}
-            >
-              {state.name.charAt(0).toUpperCase()}
-            </Text>
-          </Pressable>
-        </View>
+            {state.name.charAt(0).toUpperCase()}
+          </Text>
+        </Pressable>
       </View>
 
       <View
@@ -219,53 +216,75 @@ export function HomeScreen() {
       <View
         style={[
           styles.reality,
-          elevationStyle(colors),
           {
             backgroundColor: reality.over ? '#FEE2E2' : colors.accent,
-            borderColor: reality.over ? '#FCA5A5' : colors.brand,
-            borderLeftColor: reality.over ? colors.warn : colors.brand,
+            borderColor: reality.over ? '#FECACA' : colors.brand,
           },
         ]}
       >
+        <View style={styles.realityTop}>
+          <Text
+            style={[
+              styles.realityK,
+              { color: reality.over ? '#7F1D1D' : colors.onAccent },
+            ]}
+          >
+            REALITY CHECK
+          </Text>
+          <Text
+            style={[
+              styles.realityCapacity,
+              { color: reality.over ? '#991B1B' : colors.onAccent },
+            ]}
+          >
+            {reality.available <= 0 && reality.planned > 0
+              ? 'No time left'
+              : `${reality.percent}% capacity`}
+          </Text>
+        </View>
         <Text
           style={[
-            styles.realityK,
-            { color: reality.over ? '#7F1D1D' : colors.onAccent },
-          ]}
-        >
-          REALITY CHECK
-        </Text>
-        <Text
-          style={[
-            styles.realityT,
+            styles.realityHeadline,
             { color: reality.over ? '#7F1D1D' : colors.onAccent },
           ]}
         >
           {reality.over
-            ? reality.message
-            : `You have ${fmtDuration(reality.planned)} planned and ${fmtDuration(
-                reality.available,
-              )} of open time.`}
+            ? reality.available <= 0 && reality.planned > 0
+              ? 'No time left today.'
+              : "You're over capacity."
+            : `You have ${fmtDuration(reality.planned)} planned and ${fmtDuration(reality.available)} of open time.`}
         </Text>
-        <Meter
-          percent={reality.percent}
-          color={reality.over ? colors.warn : colors.accent}
-          track={reality.over ? colors.line : colors.surface}
-        />
         <Text
           style={[
-            type.hint,
-            {
-              color: reality.over ? '#7F1D1D' : colors.onAccent,
-              marginTop: 6,
-              fontFamily: fonts.regular,
-            },
+            styles.realityDetail,
+            { color: reality.over ? '#7F1D1D' : colors.onAccent },
           ]}
         >
           {reality.over
-            ? `${fmtDuration(reality.planned)} planned of ${fmtDuration(reality.available)} open`
+            ? reality.available <= 0 && reality.planned > 0
+              ? `${fmtDuration(reality.planned)} still planned for today`
+              : `${fmtDuration(reality.planned)} planned · ${fmtDuration(reality.available)} open`
             : `Planning around ${fmtDuration(reality.available)} of open time today.`}
         </Text>
+        {(reality.over || reality.tight) && moveCount > 0 ? (
+          <View style={styles.realityActions}>
+            <Button
+              label={`Move ${moveCount} to tomorrow`}
+              background={reality.over ? colors.warn : colors.brand}
+              foreground="#FFFFFF"
+              onPress={() => moveN(moveCount)}
+              style={styles.realityPrimaryAction}
+            />
+            <Button
+              ghost
+              label="Keep it"
+              foreground={reality.over ? '#7F1D1D' : colors.brand}
+              outline={reality.over ? '#FCA5A5' : colors.brand}
+              onPress={() => notify('Okay. I will check your load again at midday.')}
+              style={styles.realitySecondaryAction}
+            />
+          </View>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Adjust hours and energy"
@@ -278,8 +297,8 @@ export function HomeScreen() {
           <Text
             style={{
               color: reality.over ? '#7F1D1D' : colors.onAccent,
-              fontFamily: fonts.semibold,
-              fontSize: 12.5,
+              fontFamily: fonts.medium,
+              fontSize: 13,
             }}
           >
             Adjust hours and energy
@@ -290,25 +309,6 @@ export function HomeScreen() {
             color={reality.over ? '#7F1D1D' : colors.onAccent}
           />
         </Pressable>
-        {reality.tight ? (
-          <View style={styles.realityActions}>
-            <Button
-              small
-              label={`Move ${moveCount} to tomorrow`}
-              background={reality.over ? colors.warn : colors.brand}
-              foreground="#FFFFFF"
-              onPress={() => moveN(moveCount)}
-            />
-            <Button
-              small
-              ghost
-              label="Keep it"
-              foreground={reality.over ? '#7F1D1D' : colors.brand}
-              outline={reality.over ? colors.warn : colors.brand}
-              onPress={() => notify('Okay. I will check your load again at midday.')}
-            />
-          </View>
-        ) : null}
       </View>
 
       {next ? (
@@ -492,13 +492,13 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingTop: 20,
-    paddingHorizontal: 18,
-    paddingBottom: 28,
+    paddingHorizontal: 20,
+    paddingBottom: 120,
   },
   head: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
+    alignItems: 'center',
+    gap: 12,
     marginBottom: 16,
   },
   headCopy: {
@@ -506,23 +506,25 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   date: {
-    fontFamily: fonts.bold,
-    fontSize: 10,
-    letterSpacing: 1.1,
+    fontFamily: fonts.medium,
+    fontSize: 11,
+    lineHeight: 14,
     marginBottom: 4,
   },
-  greeting: {
+  greetingLine: {
     fontSize: 20,
-    lineHeight: 25,
-    letterSpacing: -0.2,
+    lineHeight: 26,
   },
-  greetingName: {
-    lineHeight: 25,
+  greetingText: {
+    fontFamily: fonts.semibold,
+    fontSize: 20,
+    lineHeight: 26,
   },
-  headActions: {
-    alignItems: 'flex-end',
-    gap: 8,
-    flexShrink: 0,
+  greetingSub: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2,
   },
   avatar: {
     width: 44,
@@ -530,6 +532,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   askbar: {
     flexDirection: 'row',
@@ -587,22 +590,37 @@ const styles = StyleSheet.create({
   reality: {
     borderRadius: 18,
     borderWidth: 1,
-    borderLeftWidth: 4,
-    paddingVertical: 15,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     marginTop: space.lg,
+    minHeight: 176,
+  },
+  realityTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   realityK: {
     fontFamily: fonts.bold,
     fontSize: 10.5,
     letterSpacing: 1.26,
   },
-  realityT: {
+  realityCapacity: {
     fontFamily: fonts.semibold,
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 12.5,
+  },
+  realityHeadline: {
+    fontFamily: fonts.semibold,
+    fontSize: 17,
+    lineHeight: 22,
+    marginTop: 8,
+  },
+  realityDetail: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    lineHeight: 18,
     marginTop: 4,
-    marginBottom: 10,
   },
   adjustPlan: {
     minHeight: 44,
@@ -610,14 +628,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     alignSelf: 'flex-start',
-    marginTop: 2,
-    marginBottom: 2,
+    marginTop: 4,
   },
   realityActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
     marginTop: 12,
+  },
+  realityPrimaryAction: {
+    minHeight: 44,
+  },
+  realitySecondaryAction: {
+    minHeight: 44,
   },
   list: {
     gap: 10,
@@ -709,7 +732,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   recommended: {
-    marginTop: space.xl,
+    marginTop: 16,
     borderLeftWidth: 4,
     borderLeftColor: '#3F8EFC',
   },

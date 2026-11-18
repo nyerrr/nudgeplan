@@ -515,9 +515,9 @@ const styles = StyleSheet.create({
     minHeight: 18,
   },
   sectionLabel: {
-    ...type.label,
-    fontSize: 11,
-    letterSpacing: 0.9,
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+    letterSpacing: 0.8,
   },
   sectionRule: {
     flex: 1,

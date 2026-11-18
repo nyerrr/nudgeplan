@@ -54,6 +54,7 @@ export function ProfileScreen() {
   const [nameDraft, setNameDraft] = useState(state.name);
   const [timePicker, setTimePicker] = useState<'start' | 'end' | null>(null);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
@@ -70,6 +71,7 @@ export function ProfileScreen() {
       : user?.provider === 'email'
         ? 'Email link'
         : 'Guest';
+
   const signingOut = () => {
     setConfirmSignOut(false);
     go('home');
@@ -79,22 +81,41 @@ export function ProfileScreen() {
   const startHours = [5, 6, 7, 8, 9, 10, 11, 12];
   const endHours = [14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
 
+  const planningStatusLabel =
+    aiStatus === 'checking'
+      ? 'Checking connection'
+      : aiStatus === 'online'
+        ? 'Smart planning available'
+        : 'Offline planning active';
+  const planningStatusDetail =
+    aiStatus === 'checking'
+      ? 'Verifying the planning service…'
+      : aiStatus === 'online'
+        ? 'Your check-ins can use the planning service when available.'
+        : 'NudgePlan can still plan on this device. Recheck when you’re back online.';
+  const planningDotColor =
+    aiStatus === 'checking'
+      ? colors.muted
+      : aiStatus === 'online'
+        ? colors.low
+        : colors.warn;
+
   return (
     <ScrollView
       style={{ backgroundColor: colors.bg }}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: Math.max(120, insets.bottom + 96) }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
       <BackButton label="Home" onPress={() => go('home')} />
       <View style={styles.profileHeader}>
         <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
-          <Text style={[styles.avatarText, { color: colors.ink }]}>
+          <Text style={[styles.avatarText, { color: colors.onAccent }]}>
             {(state.name.trim()[0] || '?').toUpperCase()}
           </Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[type.title, { color: colors.ink }]}>Profile</Text>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[type.title, { color: colors.ink }]}>Settings</Text>
           <Text style={[styles.headerSubtitle, { color: colors.muted }]}>
             Shape how NudgePlan plans your day.
           </Text>
@@ -102,281 +123,211 @@ export function ProfileScreen() {
       </View>
 
       <Section label="Account">
-        <Card style={{ paddingVertical: 2 }}>
-        <View style={styles.accountRow}>
-          <View
-            style={[styles.accountIcon, { backgroundColor: colors.surface2 }]}
-          >
-            <Icon
-              name={
-                user?.provider === 'google'
-                  ? 'logo-google'
-                  : user?.provider === 'email'
-                    ? 'mail-outline'
-                    : 'person-outline'
-              }
-              size={18}
-              color={colors.brand}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.accountTitle, { color: colors.ink }]}>
-              {user?.provider === 'guest'
-                ? 'Guest mode'
-                : user?.name || user?.email || 'Signed in'}
-            </Text>
-            <Text style={[styles.accountMeta, { color: colors.muted }]}>
-              {user?.provider === 'guest'
-                ? 'Your plan is stored on this device.'
-                : `${user?.email ?? ''} · Signed in with ${accountProvider}`}
-            </Text>
-          </View>
-          {user?.provider !== 'guest' ? (
-            <View
-              style={[styles.accountBadge, { backgroundColor: colors.accent }]}
-            >
-              <Text
-                style={[
-                  styles.accountBadgeText,
-                  { color: colors.onAccent },
-                ]}
-              >
-                {accountProvider}
+        <Card>
+          <View style={styles.accountRow}>
+            <View style={[styles.accountIcon, { backgroundColor: colors.surface2 }]}>
+              <Icon
+                name={
+                  user?.provider === 'google'
+                    ? 'logo-google'
+                    : user?.provider === 'email'
+                      ? 'mail-outline'
+                      : 'person-outline'
+                }
+                size={18}
+                color={colors.brand}
+              />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.rowTitle, { color: colors.ink }]}>
+                {user?.provider === 'guest'
+                  ? 'Guest mode'
+                  : user?.name || user?.email || 'Signed in'}
+              </Text>
+              <Text style={[styles.rowDescription, { color: colors.muted }]}>
+                {user?.provider === 'guest'
+                  ? 'Your plan is stored on this device.'
+                  : `${user?.email ?? ''}${user?.email ? ' · ' : ''}Signed in with ${accountProvider}`}
               </Text>
             </View>
-          ) : null}
-        </View>
+            {user?.provider !== 'guest' ? (
+              <View style={[styles.accountBadge, { backgroundColor: colors.accent }]}>
+                <Text style={[styles.accountBadgeText, { color: colors.onAccent }]}>
+                  {accountProvider}
+                </Text>
+              </View>
+            ) : null}
+          </View>
 
-        <View style={[styles.syncStatus, { borderTopColor: colors.line }]}>
-          <View
-            style={[
-              styles.syncDot,
-              {
-                backgroundColor:
-                  cloudSyncStatus === 'failed'
-                    ? colors.warn
-                    : cloudSyncStatus === 'synced'
-                      ? colors.low
-                      : colors.muted,
-              },
-            ]}
-          />
-          <Text
-            accessibilityLiveRegion="polite"
-            style={{
-              color: cloudSyncStatus === 'failed' ? colors.warn : colors.muted,
-              fontFamily: fonts.medium,
-              fontSize: 12.5,
-              flex: 1,
-            }}
-          >
-            {cloudSyncStatus === 'local'
-              ? 'Saved locally'
-              : cloudSyncStatus === 'syncing'
-                ? 'Syncing…'
+          <View style={[styles.inlineRow, styles.dividerTop, { borderTopColor: colors.line }]}>
+            <View style={[styles.statusDot, { backgroundColor:
+              cloudSyncStatus === 'failed'
+                ? colors.warn
                 : cloudSyncStatus === 'synced'
-                  ? 'Synced'
-                  : 'Sync failed'}
-          </Text>
-          {cloudSyncStatus === 'failed' ? (
+                  ? colors.low
+                  : colors.muted,
+            }]} />
+            <Text
+              accessibilityLiveRegion="polite"
+              style={[
+                styles.statusText,
+                {
+                  color: cloudSyncStatus === 'failed' ? colors.warn : colors.muted,
+                  flex: 1,
+                },
+              ]}
+            >
+              {cloudSyncStatus === 'local'
+                ? 'Saved locally'
+                : cloudSyncStatus === 'syncing'
+                  ? 'Syncing…'
+                  : cloudSyncStatus === 'synced'
+                    ? 'Synced'
+                    : 'Sync failed'}
+            </Text>
+            {cloudSyncStatus === 'failed' ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={retryCloudSync}
+                style={({ pressed }) => [styles.inlineAction, { opacity: pressed ? 0.65 : 1 }]}
+              >
+                <Text style={[styles.inlineActionText, { color: colors.brand }]}>Retry</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {confirmSignOut ? (
+            <View style={[styles.dividerTop, { borderTopColor: colors.line, paddingTop: 12 }]}>
+              <Text style={[styles.rowTitle, { color: colors.ink }]}>
+                {user?.provider === 'guest' ? 'Leave guest mode?' : 'Log out of NudgePlan?'}
+              </Text>
+              <Text style={[styles.rowDescription, { color: colors.muted }]}>
+                Your plan and history stay on this device.
+              </Text>
+              <View style={styles.signOutActions}>
+                <Button small ghost label="Cancel" onPress={() => setConfirmSignOut(false)} />
+                <Button
+                  small
+                  label={user?.provider === 'guest' ? 'Sign in' : 'Log out'}
+                  onPress={signingOut}
+                />
+              </View>
+            </View>
+          ) : (
             <Pressable
               accessibilityRole="button"
-              onPress={retryCloudSync}
-              style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+              accessibilityLabel={
+                user?.provider === 'guest' ? 'Sign in or create an account' : 'Log out'
+              }
+              onPress={() => setConfirmSignOut(true)}
+              style={({ pressed }) => [
+                styles.accountAction,
+                {
+                  backgroundColor: colors.surface2,
+                  borderColor: colors.line,
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
             >
-              <Text
-                style={{ color: colors.brand, fontFamily: fonts.semibold, fontSize: 12.5 }}
-              >
-                Retry
+              <Icon
+                name={user?.provider === 'guest' ? 'log-in-outline' : 'log-out-outline'}
+                size={17}
+                color={colors.brand}
+              />
+              <Text style={[styles.accountActionText, { color: colors.brand }]}>
+                {user?.provider === 'guest' ? 'Sign in or create an account' : 'Log out'}
               </Text>
             </Pressable>
-          ) : null}
-        </View>
-
-        {confirmSignOut ? (
-          <View
-            style={[
-              styles.signOutConfirm,
-              { borderTopColor: colors.line },
-            ]}
-          >
-            <Text style={[styles.signOutTitle, { color: colors.ink }]}>
-              {user?.provider === 'guest'
-                ? 'Leave guest mode?'
-                : 'Log out of NudgePlan?'}
-            </Text>
-            <Text style={[styles.signOutBody, { color: colors.muted }]}>
-              Your plan and history stay on this device.
-            </Text>
-            <View style={styles.signOutActions}>
-              <Button
-                small
-                ghost
-                label="Cancel"
-                onPress={() => setConfirmSignOut(false)}
-              />
-              <Button
-                small
-                label={user?.provider === 'guest' ? 'Sign in' : 'Log out'}
-                onPress={signingOut}
-              />
-            </View>
-          </View>
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              user?.provider === 'guest'
-                ? 'Sign in or create an account'
-                : 'Log out'
-            }
-            onPress={() => setConfirmSignOut(true)}
-            style={({ pressed }) => [
-              styles.accountAction,
-              {
-                backgroundColor: colors.surface2,
-                borderColor: colors.line,
-                opacity: pressed ? 0.7 : 1,
-              },
-            ]}
-          >
-            <Icon
-              name={
-                user?.provider === 'guest'
-                  ? 'log-in-outline'
-                  : 'log-out-outline'
-              }
-              size={17}
-              color={colors.brand}
-            />
-            <Text style={[styles.accountActionText, { color: colors.brand }]}>
-              {user?.provider === 'guest'
-                ? 'Sign in or create an account'
-                : 'Log out'}
-            </Text>
-          </Pressable>
-        )}
+          )}
         </Card>
       </Section>
 
       <Section label="Preferences">
         <Card>
-        <Text
-          style={[
-            styles.fieldLabel,
-            { color: colors.muted, marginTop: 0 },
-          ]}
-        >
-          Your name
-        </Text>
-        <TextInput
-          value={nameDraft}
-          onChangeText={setNameDraft}
-          onBlur={() => setName(nameDraft)}
-          onSubmitEditing={() => setName(nameDraft)}
-          maxLength={24}
-          selectionColor={colors.brand}
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.line,
-              color: colors.ink,
-            },
-          ]}
-        />
+          <View style={styles.block}>
+            <Text style={[styles.fieldLabel, { color: colors.muted }]}>Your name</Text>
+            <TextInput
+              value={nameDraft}
+              onChangeText={setNameDraft}
+              onBlur={() => setName(nameDraft)}
+              onSubmitEditing={() => setName(nameDraft)}
+              maxLength={24}
+              selectionColor={colors.brand}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.line,
+                  color: colors.ink,
+                },
+              ]}
+            />
+          </View>
 
-        <View style={[styles.scheduleSummary, { borderTopColor: colors.line }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.fieldLabel, { color: colors.muted, marginTop: 0 }]}>
-              Planning window
-            </Text>
+          <View style={[styles.dividerTop, { borderTopColor: colors.line, paddingTop: 14 }]}>
+            <Text style={[styles.fieldLabel, { color: colors.muted }]}>Planning window</Text>
             <Text style={[styles.scheduleValue, { color: colors.ink }]}>
               {fmtHour(state.startH)} – {fmtHour(state.endH)}
             </Text>
-            <Text style={[styles.scheduleHint, { color: colors.muted }]}>
+            <Text style={[styles.rowDescription, { color: colors.muted }]}>
               NudgePlan will plan tasks during these hours.
             </Text>
           </View>
-          <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12 }}>
-            Tap a time to change
-          </Text>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Day starts at ${fmtHour(state.startH)}`}
-          onPress={() => setTimePicker('start')}
-          style={[styles.timeRow, { borderTopColor: colors.line }]}
-        >
-          <Text style={{ color: colors.ink, fontFamily: fonts.semibold, fontSize: 14 }}>
-            Day starts
-          </Text>
-          <View style={styles.timeValue}>
-            <Text style={{ color: colors.brand, fontFamily: fonts.bold, fontSize: 14 }}>
-              {fmtHour(state.startH)}
-            </Text>
-            <Text style={{ color: colors.muted, fontSize: 18 }}>›</Text>
-          </View>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Day ends at ${fmtHour(state.endH)}`}
-          onPress={() => setTimePicker('end')}
-          style={[styles.timeRow, { borderTopColor: colors.line }]}
-        >
-          <Text style={{ color: colors.ink, fontFamily: fonts.semibold, fontSize: 14 }}>
-            Day ends
-          </Text>
-          <View style={styles.timeValue}>
-            <Text style={{ color: colors.brand, fontFamily: fonts.bold, fontSize: 14 }}>
-              {fmtHour(state.endH)}
-            </Text>
-            <Text style={{ color: colors.muted, fontSize: 18 }}>›</Text>
-          </View>
-        </Pressable>
 
-        <View style={[styles.setrow, { borderBottomColor: colors.line }]}>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                color: colors.ink,
-                fontFamily: fonts.semibold,
-                fontSize: 14,
-              }}
-            >
-              Nudges
-            </Text>
-            <Text
-              style={{
-                color: colors.muted,
-                fontFamily: fonts.regular,
-                fontSize: 13,
-              }}
-            >
-              Gentle reminders on Home
-            </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Day starts at ${fmtHour(state.startH)}`}
+            onPress={() => setTimePicker('start')}
+            style={({ pressed }) => [styles.settingRow, styles.dividerTop, { borderTopColor: colors.line, opacity: pressed ? 0.8 : 1 }]}
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.rowTitle, { color: colors.ink }]}>Day starts</Text>
+            </View>
+            <View style={styles.rowTrailing}>
+              <Text style={[styles.valueText, { color: colors.brand }]}>{fmtHour(state.startH)}</Text>
+              <Icon name="chevron-forward" size={18} color={colors.muted} />
+            </View>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Day ends at ${fmtHour(state.endH)}`}
+            onPress={() => setTimePicker('end')}
+            style={({ pressed }) => [styles.settingRow, styles.dividerTop, { borderTopColor: colors.line, opacity: pressed ? 0.8 : 1 }]}
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.rowTitle, { color: colors.ink }]}>Day ends</Text>
+            </View>
+            <View style={styles.rowTrailing}>
+              <Text style={[styles.valueText, { color: colors.brand }]}>{fmtHour(state.endH)}</Text>
+              <Icon name="chevron-forward" size={18} color={colors.muted} />
+            </View>
+          </Pressable>
+
+          <View style={[styles.settingRow, styles.dividerTop, { borderTopColor: colors.line }]}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.rowTitle, { color: colors.ink }]}>Nudges</Text>
+              <Text style={[styles.rowDescription, { color: colors.muted }]}>
+                Gentle reminders on Home
+              </Text>
+            </View>
+            <Toggle checked={state.nudges} onChange={toggleNudges} label="Nudges" />
           </View>
-          <Toggle
-            checked={state.nudges}
-            onChange={toggleNudges}
-            label="Nudges"
-          />
-        </View>
         </Card>
       </Section>
 
       <Section label="Appearance">
         <Card>
-        <Text style={[styles.fieldLabel, { color: colors.muted, marginTop: 0 }]}>Theme</Text>
-        <Segmented<ThemeMode>
-          options={[
-            { value: 'auto', label: 'Auto' },
-            { value: 'light', label: 'Light' },
-            { value: 'dark', label: 'Dark' },
-          ]}
-          value={state.theme}
-          onChange={setThemeMode}
-        />
+          <Text style={[styles.fieldLabel, { color: colors.muted }]}>Theme</Text>
+          <Segmented<ThemeMode>
+            options={[
+              { value: 'auto', label: 'Auto' },
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+            ]}
+            value={state.theme}
+            onChange={setThemeMode}
+          />
         </Card>
       </Section>
 
@@ -403,7 +354,7 @@ export function ProfileScreen() {
             ]}
           >
             <View style={styles.pickerHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ color: colors.ink, fontFamily: fonts.bold, fontSize: 18 }}>
                   {timePicker === 'start' ? 'Day starts' : 'Day ends'}
                 </Text>
@@ -422,9 +373,10 @@ export function ProfileScreen() {
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               {(timePicker === 'start' ? startHours : endHours)
-                .filter((hour) => timePicker === 'start' ? hour < state.endH : hour > state.startH)
+                .filter((hour) => (timePicker === 'start' ? hour < state.endH : hour > state.startH))
                 .map((hour) => {
-                  const active = timePicker === 'start' ? state.startH === hour : state.endH === hour;
+                  const active =
+                    timePicker === 'start' ? state.startH === hour : state.endH === hour;
                   return (
                     <Pressable
                       key={hour}
@@ -454,108 +406,87 @@ export function ProfileScreen() {
       </Modal>
 
       <Section label="Notifications">
-        <Card style={{ paddingVertical: 2 }}>
-          <View style={[styles.statusRow, { borderBottomColor: colors.line }]}>
-            <View style={[styles.statusDot, { backgroundColor: state.nudges ? colors.accent : colors.muted }]} />
-            <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12.5 }}>
-              {state.nudges ? 'Gentle reminders are enabled' : 'Gentle reminders are off'}
-            </Text>
-          </View>
-          <View style={[styles.linkrow, { paddingVertical: 10 }]}>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  color: colors.ink,
-                  fontFamily: fonts.semibold,
-                  fontSize: 14,
-                }}
-              >
-                Send a test nudge
-              </Text>
-              <Text
-                style={{
-                  color: colors.muted,
-                  fontFamily: fonts.regular,
-                  fontSize: 12.5,
-                }}
-              >
-                Check notification permissions on this device
+        <Card>
+          <View style={[styles.settingRow, { paddingTop: 0 }]}>
+            <View style={styles.statusLead}>
+              <View style={[styles.statusDot, { backgroundColor: state.nudges ? colors.low : colors.muted }]} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.rowTitle, { color: colors.ink }]}>Notification status</Text>
+              <Text style={[styles.rowDescription, { color: colors.muted }]}>
+                {state.nudges
+                  ? 'Gentle reminders are enabled on this device.'
+                  : 'Gentle reminders are off. Turn them on in Preferences.'}
               </Text>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => void testNudge()}
-              style={[
-                styles.smallBtn,
-                { backgroundColor: colors.surface2, borderColor: colors.line },
-              ]}
-            >
-              <Text
-                style={{
-                  color: colors.ink,
-                  fontFamily: fonts.semibold,
-                  fontSize: 13,
-                }}
-              >
-                Test
+          </View>
+
+          <View style={[styles.settingRow, styles.dividerTop, { borderTopColor: colors.line }]}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.rowTitle, { color: colors.ink }]}>Send a test nudge</Text>
+              <Text style={[styles.rowDescription, { color: colors.muted }]}>
+                Check notification permissions on this device.
               </Text>
-            </Pressable>
+            </View>
+            <View style={styles.rowTrailing}>
+              <Button small ghost label="Test" onPress={() => void testNudge()} />
+            </View>
           </View>
         </Card>
       </Section>
 
-      <Section label="Planning engine">
+      <Section label="Planning">
         <Card>
-          <View style={{ gap: 6 }}>
-            <Text
-              style={{
-                color: colors.ink,
-                fontFamily: fonts.semibold,
-                fontSize: 14,
-              }}
-            >
-              Ready to plan
-            </Text>
-            <Text
-              style={{
-                color: colors.muted,
-                fontFamily: fonts.regular,
-                fontSize: 13,
-              }}
-            >
-              {aiStatus === 'checking'
-                ? 'Checking readiness...'
-                : aiStatus === 'online'
-                  ? 'Ready to help plan your day'
-                  : 'Offline planning is available on this device'}
-            </Text>
+          <View style={styles.settingRow}>
+            <View style={styles.statusLead}>
+              <View style={[styles.statusDot, { backgroundColor: planningDotColor }]} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.rowTitle, { color: colors.ink }]}>{planningStatusLabel}</Text>
+              <Text style={[styles.rowDescription, { color: colors.muted }]}>
+                {planningStatusDetail}
+              </Text>
+            </View>
+          </View>
+
+          <View style={[styles.dividerTop, { borderTopColor: colors.line, paddingTop: 12 }]}>
+            <Button
+              small
+              ghost
+              label={aiStatus === 'checking' ? 'Checking…' : 'Recheck connection'}
+              onPress={() => void checkAi()}
+              disabled={aiStatus === 'checking'}
+              style={{ alignSelf: 'flex-start' }}
+            />
+
             <Pressable
               accessibilityRole="button"
-              onPress={() => void checkAi()}
-              style={[
-                styles.smallBtn,
-                {
-                  alignSelf: 'flex-start',
-                  marginTop: 4,
-                  backgroundColor: colors.surface2,
-                  borderColor: colors.line,
-                },
-              ]}
+              accessibilityLabel={showTechnicalDetails ? 'Hide technical details' : 'Show technical details'}
+              onPress={() => setShowTechnicalDetails((v) => !v)}
+              style={({ pressed }) => [styles.detailsToggle, { opacity: pressed ? 0.7 : 1 }]}
             >
-              <Text
-                style={{
-                  color: colors.ink,
-                  fontFamily: fonts.semibold,
-                  fontSize: 13,
-                }}
-              >
-                Recheck connection
+              <Text style={[styles.detailsToggleText, { color: colors.brand }]}>
+                Technical details
               </Text>
+              <Icon
+                name={showTechnicalDetails ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={colors.brand}
+              />
             </Pressable>
-            {aiInfo ? (
-              <Text style={[styles.technical, { color: colors.muted }]}>
-                Technical: {aiInfo.model} · Demo mode: {aiInfo.mock_mode ? 'on' : 'off'}
-              </Text>
+
+            {showTechnicalDetails ? (
+              <View style={[styles.detailsBox, { backgroundColor: colors.surface2, borderColor: colors.line }]}>
+                <Text style={[styles.detailsText, { color: colors.muted }]}>
+                  Status: {aiStatus}
+                </Text>
+                <Text style={[styles.detailsText, { color: colors.muted }]}>
+                  Model: {aiInfo?.model ?? 'Unavailable'}
+                </Text>
+                <Text style={[styles.detailsText, { color: colors.muted }]}>
+                  Demo mode: {aiInfo ? (aiInfo.mock_mode ? 'on' : 'off') : 'Unknown'}
+                </Text>
+              </View>
             ) : null}
           </View>
         </Card>
@@ -568,10 +499,7 @@ export function ProfileScreen() {
             onPress={async () => {
               const json = exportData();
               try {
-                await Share.share({
-                  message: json,
-                  title: 'NudgePlan data export',
-                });
+                await Share.share({ message: json, title: 'NudgePlan data export' });
               } catch {
                 if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
                   try {
@@ -587,14 +515,14 @@ export function ProfileScreen() {
             }}
           >
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ color: colors.ink, fontFamily: fonts.semibold, fontSize: 14 }}>
-                Export data
-              </Text>
-              <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12.5 }}>
+              <Text style={[styles.rowTitle, { color: colors.ink }]}>Export data</Text>
+              <Text style={[styles.rowDescription, { color: colors.muted }]}>
                 Save a copy of your tasks and preferences
               </Text>
             </View>
-            <Icon name="share-outline" size={18} color={colors.muted} />
+            <View style={styles.rowIcon}>
+              <Icon name="share-outline" size={20} color={colors.muted} />
+            </View>
           </GroupRow>
           <GroupRow
             accessibilityLabel="Reset preferences"
@@ -610,14 +538,14 @@ export function ProfileScreen() {
             }
           >
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ color: colors.ink, fontFamily: fonts.semibold, fontSize: 14 }}>
-                Reset preferences
-              </Text>
-              <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12.5 }}>
+              <Text style={[styles.rowTitle, { color: colors.ink }]}>Reset preferences</Text>
+              <Text style={[styles.rowDescription, { color: colors.muted }]}>
                 Keep your tasks and history
               </Text>
             </View>
-            <Icon name="refresh-outline" size={18} color={colors.muted} />
+            <View style={styles.rowIcon}>
+              <Icon name="refresh-outline" size={20} color={colors.muted} />
+            </View>
           </GroupRow>
           <GroupRow
             last
@@ -637,27 +565,19 @@ export function ProfileScreen() {
               )
             }
           >
-            <Text
-              style={{
-                color: colors.warn,
-                fontFamily: fonts.semibold,
-                fontSize: 14,
-                flex: 1,
-              }}
-            >
-              Delete all data
-            </Text>
-            <Icon name="trash-outline" size={18} color={colors.warn} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.rowTitle, { color: colors.warn }]}>Delete all data</Text>
+              <Text style={[styles.rowDescription, { color: colors.muted }]}>
+                Remove tasks, history, and settings from this device
+              </Text>
+            </View>
+            <View style={styles.rowIcon}>
+              <Icon name="trash-outline" size={20} color={colors.warn} />
+            </View>
           </GroupRow>
         </Group>
         {storageWarning ? (
-          <Text
-            style={{
-              color: colors.warn,
-              fontFamily: fonts.regular,
-              fontSize: 12.5,
-            }}
-          >
+          <Text style={[styles.warningText, { color: colors.warn }]}>
             Storage warning: changes may not be saved fully on this device.
           </Text>
         ) : null}
@@ -666,30 +586,16 @@ export function ProfileScreen() {
       <Section label="About">
         <Group>
           <GroupRow accessibilityLabel="About NudgePlan" onPress={() => go('about')}>
-            <Text
-              style={{
-                color: colors.ink,
-                fontFamily: fonts.semibold,
-                fontSize: 14,
-                flex: 1,
-              }}
-            >
-              About NudgePlan
-            </Text>
-            <Icon name="chevron-forward" size={18} color={colors.muted} />
+            <Text style={[styles.rowTitle, { color: colors.ink, flex: 1 }]}>About NudgePlan</Text>
+            <View style={styles.rowIcon}>
+              <Icon name="chevron-forward" size={20} color={colors.muted} />
+            </View>
           </GroupRow>
           <GroupRow last accessibilityLabel="Privacy" onPress={() => go('privacy')}>
-            <Text
-              style={{
-                color: colors.ink,
-                fontFamily: fonts.semibold,
-                fontSize: 14,
-                flex: 1,
-              }}
-            >
-              Privacy
-            </Text>
-            <Icon name="chevron-forward" size={18} color={colors.muted} />
+            <Text style={[styles.rowTitle, { color: colors.ink, flex: 1 }]}>Privacy</Text>
+            <View style={styles.rowIcon}>
+              <Icon name="chevron-forward" size={20} color={colors.muted} />
+            </View>
           </GroupRow>
         </Group>
       </Section>
@@ -700,14 +606,8 @@ export function ProfileScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingTop: 20,
-    paddingHorizontal: 18,
-    paddingBottom: 28,
-  },
-  fieldLabel: {
-    fontFamily: fonts.semibold,
-    fontSize: 12,
-    marginTop: 14,
-    marginBottom: 5,
+    paddingHorizontal: 20,
+    paddingBottom: 120,
   },
   profileHeader: {
     flexDirection: 'row',
@@ -728,123 +628,65 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontFamily: fonts.regular,
     fontSize: 13,
+    lineHeight: 18,
     marginTop: 2,
   },
-  accountRow: {
+  block: {
+    gap: 6,
+  },
+  rowTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  rowDescription: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  settingRow: {
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 11,
+    justifyContent: 'space-between',
+    gap: 12,
     paddingVertical: 12,
   },
-  syncStatus: {
-    minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: 8,
-  },
-  syncDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  accountIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  accountTitle: {
-    fontFamily: fonts.semibold,
-    fontSize: 14,
-  },
-  accountMeta: {
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 2,
-  },
-  accountBadge: {
-    borderRadius: 99,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-  },
-  accountBadgeText: {
-    fontFamily: fonts.semibold,
-    fontSize: 10.5,
-    letterSpacing: 0.3,
-  },
-  accountAction: {
+  inlineRow: {
     minHeight: 44,
-    borderWidth: 1,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    marginTop: 2,
-    marginBottom: 12,
-  },
-  accountActionText: {
-    fontFamily: fonts.semibold,
-    fontSize: 13,
-  },
-  signOutConfirm: {
-    borderTopWidth: 1,
-    paddingTop: 10,
-    paddingBottom: 12,
-  },
-  signOutTitle: {
-    fontFamily: fonts.semibold,
-    fontSize: 13,
-  },
-  signOutBody: {
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 3,
-  },
-  signOutActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-    marginTop: 10,
-  },
-  scheduleSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderTopWidth: 1,
-    marginTop: 16,
-    paddingTop: 4,
-  },
-  scheduleValue: {
-    fontFamily: fonts.semibold,
-    fontSize: 16,
-  },
-  scheduleHint: {
-    fontFamily: fonts.regular,
-    fontSize: 12.5,
-    marginTop: 3,
-  },
-  technical: {
-    fontFamily: fonts.regular,
-    fontSize: 11.5,
-    marginTop: 4,
-  },
-  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingVertical: 10,
-    borderBottomWidth: 1,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  dividerTop: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: 12,
+  },
+  rowTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    flexShrink: 0,
+  },
+  rowIcon: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  valueText: {
+    fontFamily: fonts.semibold,
+    fontSize: 14,
+  },
+  fieldLabel: {
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 6,
   },
   input: {
     minHeight: 44,
@@ -853,19 +695,122 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     fontFamily: fonts.regular,
+    fontSize: 15,
+  },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 2,
+  },
+  accountIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  accountBadge: {
+    borderRadius: 99,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignSelf: 'center',
+  },
+  accountBadgeText: {
+    fontFamily: fonts.semibold,
+    fontSize: 11,
+    letterSpacing: 0.2,
+  },
+  statusLead: {
+    width: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontFamily: fonts.medium,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  inlineAction: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  inlineActionText: {
+    fontFamily: fonts.semibold,
+    fontSize: 13,
+  },
+  accountAction: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 14,
+    paddingHorizontal: 12,
+  },
+  accountActionText: {
+    fontFamily: fonts.semibold,
     fontSize: 14,
   },
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    paddingVertical: 12,
+  signOutTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 14,
   },
-  timeValue: {
+  signOutBody: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  signOutActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 12,
+  },
+  scheduleValue: {
+    fontFamily: fonts.semibold,
+    fontSize: 17,
+    lineHeight: 22,
+  },
+  detailsToggle: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: 4,
+  },
+  detailsToggleText: {
+    fontFamily: fonts.semibold,
+    fontSize: 13,
+  },
+  detailsBox: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    gap: 4,
+  },
+  detailsText: {
+    fontFamily: fonts.regular,
+    fontSize: 12.5,
+    lineHeight: 17,
+  },
+  warningText: {
+    fontFamily: fonts.regular,
+    fontSize: 12.5,
+    lineHeight: 17,
+    marginTop: 10,
   },
   pickerOverlay: {
     flex: 1,
@@ -876,12 +821,13 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 20,
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
   },
   pickerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: 12,
     paddingBottom: 12,
   },
   closeButton: {
@@ -897,27 +843,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-  },
-  setrow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    marginTop: 10,
-  },
-  linkrow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-  },
-  smallBtn: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
   },
 });
