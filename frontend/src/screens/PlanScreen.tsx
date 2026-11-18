@@ -25,7 +25,7 @@ export function PlanScreen() {
   const day = state.view;
   const list = sortedTasks(state.tasks, day);
   const placed = list.filter((task) => task.start != null);
-  const loose = list.filter((task) => task.start == null);
+  const loose = list.filter((task) => task.start == null && !task.done);
   const percent = capacityPercent(state, day);
   const planned = plannedMinutes(state.tasks, day);
   const available = availableMinutesFor(

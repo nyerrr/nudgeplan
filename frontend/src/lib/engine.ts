@@ -733,7 +733,7 @@ export function peakHours(
 
 export function plannedMinutes(tasks: Task[], day: Day): number {
   return tasks
-    .filter((task) => task.day === day)
+    .filter((task) => task.day === day && !task.done)
     .reduce((total, task) => total + task.dur, 0);
 }
 
