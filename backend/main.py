@@ -858,13 +858,14 @@ async def plan_checkin(req: CheckInRequest):
     resp = _checkin_response_from_dict(req, parsed, "gemini", used_model, today)
     latency_ms = int((time.monotonic() - start_t) * 1000)
     logger.info(
-        "checkin: version=%s model=%s latency_ms=%d intent=%s items=%d actions=%d",
+        "checkin: version=%s model=%s latency_ms=%d intent=%s items=%d actions=%d fallbacks=%d",
         PROMPT_VERSION,
         used_model or "offline",
         latency_ms,
         resp.intent,
         len(resp.items),
         len(resp.actions),
+        len(errors),
     )
 
     if req.idempotency_key:
@@ -1223,7 +1224,6 @@ async def _generate_with_fallback(
                         time.monotonic() + MODEL_COOLDOWN_SECONDS
                     )
                 break
-    return None, None, errors
     return None, None, errors
 
 
