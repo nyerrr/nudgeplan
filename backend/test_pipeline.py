@@ -268,6 +268,47 @@ def test_prompt_includes_today() -> None:
     print("[OK] prompt anchors relative dates to today")
 
 
+def test_prompts_teach_output_shape() -> None:
+    from datetime import date, timedelta
+
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+
+    plan_prompt = main.build_prompt("whatever")
+    expect("FEW-SHOT EXAMPLES" in plan_prompt, "plan prompt has no examples")
+    expect("OUTPUT CONTRACT" in plan_prompt, "plan prompt has no output contract")
+    expect(tomorrow in plan_prompt, "plan prompt does not anchor tomorrow")
+
+    _, checkin_system = main.build_checkin_prompt(
+        "I have an exam", 9, 17, context="", today=date.today()
+    )
+    expect("FEW-SHOT EXAMPLES" in checkin_system, "check-in prompt has no examples")
+    expect("OUTPUT CONTRACT" in checkin_system, "check-in prompt has no output contract")
+    expect("clarify_state" in checkin_system, "check-in prompt omits clarify_state")
+    expect(tomorrow in checkin_system, "check-in prompt does not anchor tomorrow")
+
+    steps_prompt = main.build_steps_prompt("Work on the report", "high", 45)
+    expect("FEW-SHOT EXAMPLES" in steps_prompt, "steps prompt has no examples")
+    expect("OUTPUT CONTRACT" in steps_prompt, "steps prompt has no output contract")
+    expect('"minutes"' in steps_prompt, "steps prompt omits the minutes field")
+    print("[OK] prompts include few-shot examples and strict output contracts")
+
+
+def test_checkin_payload_accepts_clarify_state() -> None:
+    payload = main.CheckInPayload(
+        intent="clarify",
+        clarify_state={
+            "original_request": "I have an exam.",
+            "question": "Which subject is the exam for, and when is it?",
+        },
+    )
+    expect(payload.clarify_state is not None, "clarify_state was dropped by the schema")
+    expect(
+        payload.clarify_state.question.endswith("when is it?"),
+        f"clarify question not preserved: {payload.clarify_state}",
+    )
+    print("[OK] check-in schema keeps clarify state across turns")
+
+
 def test_offline_planner() -> None:
     main.MOCK = True
     from fastapi.testclient import TestClient
@@ -619,6 +660,8 @@ def main_check() -> int:
     test_malformed_output()
     test_past_due_date_dropped()
     test_prompt_includes_today()
+    test_prompts_teach_output_shape()
+    test_checkin_payload_accepts_clarify_state()
     test_offline_planner()
     test_greeting_is_chat()
     test_checkin_contract()
