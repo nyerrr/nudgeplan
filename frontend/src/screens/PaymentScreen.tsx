@@ -104,7 +104,11 @@ export function PaymentScreen() {
                 placeholder="name@school.edu"
                 placeholderTextColor={colors.muted}
                 autoCapitalize="none"
+                autoComplete="off"
+                autoCorrect={false}
+                importantForAutofill="no"
                 keyboardType="email-address"
+                textContentType="none"
                 style={[
                   styles.input,
                   { color: colors.ink, borderColor: colors.line, backgroundColor: colors.surface2 },
@@ -139,6 +143,8 @@ export function PaymentScreen() {
               value={cardName}
               onChangeText={setCardName}
               placeholder="Name on card"
+              autoComplete="off"
+              textContentType="none"
             />
             <Field
               label="Card number"
@@ -146,6 +152,8 @@ export function PaymentScreen() {
               onChangeText={setCardNumber}
               placeholder="1234 5678 9012 3456"
               keyboardType="number-pad"
+              autoComplete="off"
+              textContentType="none"
             />
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
@@ -155,10 +163,21 @@ export function PaymentScreen() {
                   onChangeText={setExpiry}
                   placeholder="MM/YY"
                   keyboardType="number-pad"
+                  autoComplete="off"
+                  textContentType="none"
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Field label="CVC" value={cvc} onChangeText={setCvc} placeholder="123" keyboardType="number-pad" />
+                <Field
+                  label="CVC"
+                  value={cvc}
+                  onChangeText={setCvc}
+                  placeholder="123"
+                  keyboardType="number-pad"
+                  autoComplete="off"
+                  textContentType="none"
+                  secureTextEntry
+                />
               </View>
             </View>
             <Text style={[styles.help, { color: colors.muted, marginTop: 4 }]}>
@@ -189,12 +208,18 @@ function Field({
   onChangeText,
   placeholder,
   keyboardType,
+  autoComplete,
+  textContentType,
+  secureTextEntry,
 }: {
   label: string;
   value: string;
   onChangeText: (v: string) => void;
   placeholder: string;
   keyboardType?: 'default' | 'email-address' | 'number-pad';
+  autoComplete?: React.ComponentProps<typeof TextInput>['autoComplete'];
+  textContentType?: React.ComponentProps<typeof TextInput>['textContentType'];
+  secureTextEntry?: boolean;
 }) {
   const { colors } = useApp();
   return (
@@ -206,6 +231,11 @@ function Field({
         placeholder={placeholder}
         placeholderTextColor={colors.muted}
         keyboardType={keyboardType ?? 'default'}
+        autoComplete={autoComplete}
+        textContentType={textContentType}
+        importantForAutofill="no"
+        autoCorrect={false}
+        secureTextEntry={secureTextEntry}
         style={[
           styles.input,
           { color: colors.ink, borderColor: colors.line, backgroundColor: colors.surface2 },
