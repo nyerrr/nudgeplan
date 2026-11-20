@@ -30,6 +30,9 @@ import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { PlanScreen } from './src/screens/PlanScreen';
 import { PrivacyScreen } from './src/screens/PrivacyScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { SubscriptionScreen } from './src/screens/SubscriptionScreen';
+import { CheckoutScreen } from './src/screens/CheckoutScreen';
+import { PaymentScreen } from './src/screens/PaymentScreen';
 import { AppProvider, useApp } from './src/state';
 
 function CurrentScreen() {
@@ -45,6 +48,12 @@ function CurrentScreen() {
       return <InsightsScreen />;
     case 'profile':
       return <ProfileScreen />;
+    case 'subscription':
+      return <SubscriptionScreen />;
+    case 'checkout':
+      return <CheckoutScreen />;
+    case 'payment':
+      return <PaymentScreen />;
     case 'privacy':
       return <PrivacyScreen />;
     case 'about':

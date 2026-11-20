@@ -195,6 +195,15 @@ export async function clearPendingDelete(userId: string, taskId: string): Promis
   return pendingDeleteQueue;
 }
 
+export async function clearAllPendingDeletes(userId: string): Promise<void> {
+  pendingDeleteQueue = pendingDeleteQueue
+    .catch(() => undefined)
+    .then(async () => {
+      await AsyncStorage.removeItem(pendingDeletesKey(userId));
+    });
+  return pendingDeleteQueue;
+}
+
 /** An unconfirmed check-in must survive an app restart; otherwise the user's
  *  message stays in chat but its proposed tasks are lost. */
 export async function loadPendingReview(

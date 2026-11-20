@@ -14,6 +14,9 @@ export type Screen =
   | 'focus'
   | 'insights'
   | 'profile'
+  | 'subscription'
+  | 'checkout'
+  | 'payment'
   | 'privacy'
   | 'about';
 

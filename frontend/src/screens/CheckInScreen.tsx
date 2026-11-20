@@ -51,27 +51,33 @@ export function CheckInScreen() {
   const examples = [
     {
       title: 'Plan my workday',
-      prompt: 'Finish the quarterly report 2h, call the dentist, reply to Sam\'s email, gym at 6pm',
+      prompt:
+        'Plan my workday: [list your tasks, how long each takes, and any fixed times]',
     },
     {
-      title: 'I have an exam Friday',
-      prompt: 'I have an organic chemistry exam on Friday and need to prepare',
+      title: 'I have an exam soon',
+      prompt:
+        'I have an exam on [day/date]: [subject or topics and how much time you can study]',
     },
     {
       title: 'Plan my morning',
-      prompt: 'Plan my morning: draft the intro 45m, team standup at 10am, reply to emails',
+      prompt:
+        'Plan my morning: [your morning tasks, times, and priorities]',
     },
     {
-      title: 'I’m overwhelmed',
-      prompt: 'I’m overwhelmed with too much to do today, help me pick the top 3',
+      title: "I'm overwhelmed",
+      prompt:
+        "I'm overwhelmed today. Here's what's on my plate: [list your tasks]. Help me pick the top 3.",
     },
     {
-      title: 'I’m tired today',
-      prompt: "I'm tired today. Study for the chem exam 90m, laundry",
+      title: "I'm tired today",
+      prompt:
+        "I'm tired today. I need to: [list your tasks]. Help me plan a lighter day.",
     },
     {
-      title: 'I’m feeling stuck',
-      prompt: "I'm stuck on the budget spreadsheet",
+      title: "I'm feeling stuck",
+      prompt:
+        "I'm feeling stuck on [task or project]. Help me break it into a small next step.",
     },
   ];
 
@@ -157,6 +163,7 @@ export function CheckInScreen() {
             {
               color: mine ? colors.onAccent : colors.ink,
               fontFamily: fonts.regular,
+              flexShrink: 1,
             },
           ]}
         >
@@ -195,12 +202,13 @@ export function CheckInScreen() {
                 ]}
               >
                 <Icon name="checkmark-circle" size={14} color={colors.low} />
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <Text
                     style={{
                       color: colors.ink,
                       fontFamily: fonts.medium,
                       fontSize: 12.5,
+                      flexShrink: 1,
                     }}
                   >
                     {act.type.toUpperCase()}: {act.title || act.taskId}
@@ -288,6 +296,7 @@ export function CheckInScreen() {
                       color: colors.brand,
                       fontFamily: fonts.semibold,
                       fontSize: 12,
+                      flexShrink: 0,
                     }}
                   >
                     {t.dur}m
@@ -299,6 +308,9 @@ export function CheckInScreen() {
                       color: colors.muted,
                       fontFamily: fonts.regular,
                       fontSize: 11.5,
+                      flexGrow: 1,
+                      flexShrink: 1,
+                      minWidth: 0,
                     }}
                   >
                     {t.day === 'tomorrow' ? 'Tomorrow' : 'Today'}
@@ -314,6 +326,7 @@ export function CheckInScreen() {
                         color: colors.muted,
                         fontFamily: fonts.medium,
                         fontSize: 11,
+                        flexShrink: 0,
                       }}
                     >
                       {t.steps.length} steps
@@ -345,6 +358,7 @@ export function CheckInScreen() {
                   fontFamily: fonts.semibold,
                   fontSize: 13,
                   flex: 1,
+                  minWidth: 0,
                 }}
               >
                 {message.tasks.length} {message.tasks.length === 1 ? 'task' : 'tasks'} found
@@ -369,6 +383,7 @@ export function CheckInScreen() {
                     fontFamily: fonts.regular,
                     fontSize: 13,
                     flex: 1,
+                    minWidth: 0,
                   }}
                 >
                   {task.title}
@@ -378,6 +393,8 @@ export function CheckInScreen() {
                     color: colors.ink,
                     fontFamily: fonts.semibold,
                     fontSize: 12.5,
+                    flexShrink: 0,
+                    textAlign: 'right',
                   }}
                 >
                   {task.when === 'Needs room' ? 'Not scheduled' : task.when}
@@ -412,13 +429,24 @@ export function CheckInScreen() {
     >
       <View style={styles.header}>
         <Text style={[type.title, { color: colors.ink }]}>
-          {hasConversation ? 'Check-in' : 'What’s on your mind?'}
+          {hasConversation ? 'Check-in' : "What's on your mind?"}
         </Text>
         <Text style={[type.sub, { color: colors.muted, marginTop: 2 }]}>
           {hasConversation
-            ? 'Add anything new and I’ll help shape it into your day.'
-            : 'Brain dump anything. I’ll help make it manageable.'}
+            ? "Add anything new and I'll help shape it into your day."
+            : "Brain dump anything. I'll help make it manageable."}
         </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="View subscription plans and AI usage"
+          onPress={() => go('subscription')}
+          style={({ pressed }) => [styles.planHint, { opacity: pressed ? 0.7 : 1 }]}
+        >
+          <Text style={[styles.planHintText, { color: colors.muted }]}>
+            Basic plan · 10 AI check-ins/month ·{' '}
+            <Text style={{ color: colors.brand, fontFamily: fonts.semibold }}>Get more with Plus</Text>
+          </Text>
+        </Pressable>
       </View>
 
       <ScrollView
@@ -436,16 +464,20 @@ export function CheckInScreen() {
               Tell me what you need to do, how you feel, or what feels difficult.
             </Text>
             <Text style={[styles.emptyIntroBody, { color: colors.muted }]}>
-              I’ll sort it into a realistic plan without asking you to organize it first.
+              Tap an example to start, then replace it with your own tasks.
             </Text>
             <View style={styles.quickExamples}>
               {examples.map((example) => (
                 <Pressable
                   key={example.title}
                   accessibilityRole="button"
-                  accessibilityLabel={example.title}
+                  accessibilityLabel={`Use example: ${example.title}`}
+                  accessibilityHint="Fills the message box so you can edit it with your own tasks"
                   disabled={typing || !!pendingReview}
-                  onPress={() => void sendCheckIn(example.prompt)}
+                  onPress={() => {
+                    setText(example.prompt);
+                    setShowExamples(false);
+                  }}
                   style={[styles.quickExample, { backgroundColor: colors.surface, borderColor: colors.line }]}
                 >
                   <Text style={[styles.suggestionChipText, { color: colors.ink }]}>
@@ -550,9 +582,13 @@ export function CheckInScreen() {
               <Pressable
                 key={example.title}
                 accessibilityRole="button"
-                accessibilityLabel={example.title}
+                accessibilityLabel={`Use example: ${example.title}`}
+                accessibilityHint="Fills the message box so you can edit it with your own tasks"
                 disabled={typing}
-                onPress={() => void sendCheckIn(example.prompt)}
+                onPress={() => {
+                  setText(example.prompt);
+                  setShowExamples(false);
+                }}
                 style={[styles.compactExample, { backgroundColor: colors.surface, borderColor: colors.line }]}
               >
                 <Text style={{ color: colors.ink, fontFamily: fonts.medium, fontSize: 12 }}>
@@ -572,13 +608,14 @@ export function CheckInScreen() {
           <TextInput
             value={text}
             onChangeText={setText}
-            onSubmitEditing={submit}
             editable={!typing}
+            multiline
+            blurOnSubmit={false}
             placeholder={listening ? 'Listening...' : 'Tell me about your day...'}
             placeholderTextColor={colors.muted}
             selectionColor={colors.brand}
             style={[styles.askInput, { color: colors.ink }]}
-            returnKeyType="send"
+            textAlignVertical="top"
           />
           <Pressable
             accessibilityRole="button"
@@ -627,6 +664,15 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingHorizontal: 18,
     paddingBottom: 8,
+  },
+  planHint: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  planHintText: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    lineHeight: 18,
   },
   examplesToggle: {
     minHeight: 44,
@@ -712,15 +758,17 @@ const styles = StyleSheet.create({
   },
   addedSummary: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
     paddingBottom: 3,
   },
   addedRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 6,
     borderRadius: 10,
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -750,19 +798,21 @@ const styles = StyleSheet.create({
   },
   askbar: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 6,
     borderWidth: 1.5,
-    borderRadius: 999,
+    borderRadius: 24,
     paddingLeft: 16,
     paddingRight: 5,
-    paddingVertical: 5,
+    paddingVertical: 6,
   },
   askInput: {
     minHeight: 44,
+    maxHeight: 120,
     flex: 1,
     minWidth: 0,
-    paddingVertical: 8,
+    paddingTop: 10,
+    paddingBottom: 10,
     fontFamily: fonts.regular,
     fontSize: 14,
   },
@@ -803,7 +853,7 @@ const styles = StyleSheet.create({
   },
   actionCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
     borderWidth: 1,
     borderRadius: 8,
@@ -831,6 +881,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     flex: 1,
+    minWidth: 0,
   },
   kindBadge: {
     paddingHorizontal: 5,
@@ -839,8 +890,10 @@ const styles = StyleSheet.create({
   },
   inlineTaskMeta: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 4,
   },
   suggestionChipText: {
     fontFamily: fonts.medium,

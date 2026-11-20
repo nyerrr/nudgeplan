@@ -122,6 +122,25 @@ export function ProfileScreen() {
         </View>
       </View>
 
+      <Section label="Subscription">
+        <Group>
+          <GroupRow accessibilityLabel="View subscription plans" onPress={() => go('subscription')} last>
+            <View style={[styles.accountIcon, { backgroundColor: colors.surface2 }]}>
+              <Icon name="sparkles-outline" size={18} color={colors.brand} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.rowTitle, { color: colors.ink }]}>Subscription & billing</Text>
+              <Text style={[styles.rowDescription, { color: colors.muted }]}>
+                Basic plan · 10 AI check-ins/month
+              </Text>
+            </View>
+            <View style={styles.rowIcon}>
+              <Icon name="chevron-forward" size={20} color={colors.muted} />
+            </View>
+          </GroupRow>
+        </Group>
+      </Section>
+
       <Section label="Account">
         <Card>
           <View style={styles.accountRow}>
@@ -526,16 +545,20 @@ export function ProfileScreen() {
           </GroupRow>
           <GroupRow
             accessibilityLabel="Reset preferences"
-            onPress={() =>
-              Alert.alert(
-                'Reset preferences',
-                'Reset your planning hours, energy, nudges, and theme without deleting tasks or history?',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Reset', onPress: resetPreferences },
-                ],
-              )
-            }
+            onPress={() => {
+              const message =
+                'Reset your planning hours, energy, nudges, and theme without deleting tasks or history?';
+              if (Platform.OS === 'web') {
+                if (typeof globalThis.confirm === 'function' && globalThis.confirm(`Reset preferences?\n\n${message}`)) {
+                  resetPreferences();
+                }
+                return;
+              }
+              Alert.alert('Reset preferences', message, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Reset', onPress: resetPreferences },
+              ]);
+            }}
           >
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[styles.rowTitle, { color: colors.ink }]}>Reset preferences</Text>
@@ -550,20 +573,24 @@ export function ProfileScreen() {
           <GroupRow
             last
             accessibilityLabel="Delete all data"
-            onPress={() =>
-              Alert.alert(
-                'Delete all data',
-                'This removes all tasks, history, and settings from this device, and deletes your synced rows from your account. This cannot be undone.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: () => void resetApp(),
-                  },
-                ],
-              )
-            }
+            onPress={() => {
+              const message =
+                'This removes all tasks, history, and settings from this device, and deletes your synced rows from your account. This cannot be undone.';
+              if (Platform.OS === 'web') {
+                if (typeof globalThis.confirm === 'function' && globalThis.confirm(`Delete all data?\n\n${message}`)) {
+                  void resetApp();
+                }
+                return;
+              }
+              Alert.alert('Delete all data', message, [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => void resetApp(),
+                },
+              ]);
+            }}
           >
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[styles.rowTitle, { color: colors.warn }]}>Delete all data</Text>

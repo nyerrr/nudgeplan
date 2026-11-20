@@ -60,6 +60,7 @@ import {
 } from './lib/taskReview';
 import {
   addPendingDelete,
+  clearAllPendingDeletes,
   clearPendingDelete,
   clearState,
   loadPendingDeletes,
@@ -1582,16 +1583,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const resetApp = useCallback(async () => {
     await cancelTaskNudges();
     await cancelTimerNotification();
-    if (user?.provider !== 'guest' && supabase && userIdRef.current) {
-      const owner = userIdRef.current;
+    const owner = userIdRef.current;
+    if (user?.provider !== 'guest' && supabase && owner) {
       const queued = pendingDeletes.current.get(owner) ?? new Set<string>();
       queued.add('*');
       pendingDeletes.current.set(owner, queued);
       await addPendingDelete(owner, '*').catch((e) =>
         console.warn('[sync] Failed to save pending account reset', e),
       );
+    } else if (owner) {
+      pendingDeletes.current.delete(owner);
+      await clearAllPendingDeletes(owner).catch(() => {});
     }
-    await clearState(userIdRef.current);
+    await clearState(owner);
     pendingReviewRef.current = null;
     clarifyStateRef.current = null;
     setPendingReview(null);
